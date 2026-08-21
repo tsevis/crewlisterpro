@@ -31,12 +31,53 @@ struct Boat: Codable, Identifiable, Hashable {
     static let placeholderName = "NEW YACHT"
 }
 
+/// Whether a charter is still being worked on, or has been put away.
+///
+/// Archiving is not deleting. `CrewStore.deleteTrip` shreds the encrypted
+/// passport scans, which is right when an operator wants them gone and wrong
+/// when the season merely ended — a charter can be queried by a port authority
+/// long after it sailed. The raw values are the strings the Python build writes,
+/// so both stores describe a trip the same way.
+enum TripStatus: String, Codable, CaseIterable, Sendable {
+    case draft
+    case archived
+}
+
 struct Trip: Codable, Identifiable, Hashable {
     var id = UUID()
     var boatID: UUID
     var departureDate: Date
     var returnDate: Date
-    var status: String = "draft"
+    var status: TripStatus = .draft
+
+    var isArchived: Bool { status == .archived }
+}
+
+extension Trip {
+    /// Decoded by hand so an unreadable `status` costs one trip's status rather
+    /// than the entire database.
+    ///
+    /// Two ways the synthesised version bites, both already paid for here once
+    /// on `CrewDocument.suggestedFields`: a key absent from an older record
+    /// throws `keyNotFound` rather than using the property's default, and a
+    /// `RawRepresentable` enum throws on any value it does not know. Either
+    /// would surface as the whole store reading as `invalidPayload` — an app
+    /// that can no longer open its own data. A trip whose status is missing or
+    /// unrecognised is simply a draft.
+    ///
+    /// In an extension deliberately: an `init` in the struct body would suppress
+    /// the memberwise initialiser the rest of the app and its tests construct
+    /// trips with.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        boatID = try container.decode(UUID.self, forKey: .boatID)
+        departureDate = try container.decode(Date.self, forKey: .departureDate)
+        returnDate = try container.decode(Date.self, forKey: .returnDate)
+        // One `try?` covers both failures: the key being absent and the value
+        // being a status this build has never heard of.
+        status = (try? container.decode(TripStatus.self, forKey: .status)) ?? .draft
+    }
 }
 
 struct CrewPerson: Codable, Identifiable, Hashable {
@@ -70,12 +111,32 @@ struct CrewDocument: Codable, Identifiable, Hashable {
     /// passing every validation rule there is. The operator confirming it is
     /// looking at the same unreadable line the model guessed from, so the
     /// interface has to tell them which values carry no arithmetic.
-    var suggestedFields: Set<String> = []
+    /// Optional in storage, deliberately.
+    ///
+    /// Swift's synthesised `Codable` does NOT fall back to a property's default
+    /// when the key is absent — it throws `keyNotFound`. Declaring this
+    /// non-optional made every document written before it existed fail to
+    /// decode, which surfaced as the whole store reading as `invalidPayload`:
+    /// an app that could no longer open its own data. An optional decodes as
+    /// nil and reads as empty, so an old document is simply a document with no
+    /// suggestions on it.
+    ///
+    /// Any field added here from now on must be optional for the same reason.
+    var suggestedFields: Set<String>?
     var imageRevisions: [String] = []
 
     // MARK: - Field access
 
-    func isSuggested(_ field: CrewField) -> Bool { suggestedFields.contains(field.rawValue) }
+    func isSuggested(_ field: CrewField) -> Bool { suggestedFields?.contains(field.rawValue) == true }
+
+    /// Records that a value came from the local model rather than the MRZ.
+    mutating func markSuggested(_ field: CrewField) {
+        suggestedFields = (suggestedFields ?? []).union([field.rawValue])
+    }
+
+    mutating func markSuggested(rawField key: String) {
+        suggestedFields = (suggestedFields ?? []).union([key])
+    }
 
     subscript(field: CrewField) -> String {
         get { fields[field.rawValue] ?? "" }
@@ -87,7 +148,7 @@ struct CrewDocument: Codable, Identifiable, Hashable {
             verifiedFields.remove(field.rawValue)
             // And it stops being the model's suggestion: what the operator
             // typed is theirs, however it got there.
-            suggestedFields.remove(field.rawValue)
+            suggestedFields?.remove(field.rawValue)
             if field == .documentNumber { documentNumber = trimmed }
             if field == .documentType { documentType = trimmed.isEmpty ? "unknown" : trimmed }
         }

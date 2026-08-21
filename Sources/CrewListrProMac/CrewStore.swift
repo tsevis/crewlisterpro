@@ -116,7 +116,9 @@ final class CrewStore {
             hasLoaded = true
             // Open on the work in hand rather than on two empty columns: the
             // first trip, and within it the first document still needing review.
-            selectedTripID = selectedTripID ?? data.trips.first?.id
+            // An archived trip is not work in hand, so it is never what the app
+            // opens on — reaching one is always a deliberate act.
+            selectedTripID = selectedTripID ?? activeTrips.first?.id
             let documents = selectedTripDocuments
             selectedDocumentID = selectedDocumentID
                 ?? documents.first { !$0.canExport() }?.id
@@ -127,6 +129,14 @@ final class CrewStore {
     }
 
     // MARK: - Trips and boats
+
+    /// The trips the picker offers: everything not put away.
+    var activeTrips: [Trip] { data.trips.filter { !$0.isArchived } }
+
+    /// Finished charters, kept for the record. Listed separately rather than
+    /// hidden outright — a trip nothing can reach is a trip whose documents can
+    /// never be restored or erased.
+    var archivedTrips: [Trip] { data.trips.filter(\.isArchived) }
 
     @discardableResult
     func createTrip() -> UUID {
@@ -165,9 +175,41 @@ final class CrewStore {
         persist()
     }
 
+    /// Puts a finished charter away. Destroys nothing.
+    ///
+    /// The trip, its documents, its people and the encrypted originals all stay
+    /// exactly where they are; only the picker stops offering it. This is the
+    /// non-destructive half of the pair — `deleteTrip` is the other half, and
+    /// the two must never be confused at the call site.
+    func archiveTrip(_ id: UUID) {
+        setStatus(.archived, onTripWith: id)
+    }
+
+    /// Brings an archived charter back into the working list.
+    func restoreTrip(_ id: UUID) {
+        setStatus(.draft, onTripWith: id)
+    }
+
+    private func setStatus(_ status: TripStatus, onTripWith id: UUID) {
+        guard let index = data.trips.firstIndex(where: { $0.id == id }),
+              data.trips[index].status != status else { return }
+        data.trips[index].status = status
+        // Only when the operator archived the trip they were looking at: the
+        // review pane must never sit on a trip the picker no longer offers,
+        // and the stale document behind it must go with it.
+        if status == .archived, selectedTripID == id {
+            selectedTripID = activeTrips.first?.id
+            selectedDocumentID = nil
+        }
+        persist()
+    }
+
     /// Removes a trip with its documents, assignments, people and the encrypted
     /// originals on disk. Nothing else in the app can delete stored identity
     /// documents, which an operator holding passport scans has to be able to do.
+    ///
+    /// Reachable for an archived trip too, deliberately: archiving must not be
+    /// a one-way door that strands passport scans out of the operator's reach.
     func deleteTrip(_ id: UUID) {
         let documents = data.documents.filter { $0.tripID == id }
         for document in documents { discardFiles(of: document) }
@@ -485,7 +527,7 @@ final class CrewStore {
                     data.documents[index].fields[key] = value
                     // Marked, not merged silently. A value with no check digits
                     // behind it must not be indistinguishable from one that has.
-                    data.documents[index].suggestedFields.insert(key)
+                    data.documents[index].markSuggested(rawField: key)
                 }
                 data.documents[index].riskReasons.append("Local AI suggestions added; all remain unverified.")
                 refreshRisk(at: index)

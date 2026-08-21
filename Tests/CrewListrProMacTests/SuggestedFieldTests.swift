@@ -28,7 +28,7 @@ final class SuggestedFieldTests: XCTestCase {
     func testASuggestedFieldSaysSo() {
         var subject = document()
         subject[.fullName] = "MIHCHYK"
-        subject.suggestedFields.insert(CrewField.fullName.rawValue)
+        subject.markSuggested(.fullName)
         XCTAssertTrue(subject.isSuggested(.fullName))
     }
 
@@ -38,7 +38,7 @@ final class SuggestedFieldTests: XCTestCase {
     func testTypingOverASuggestionClearsIt() {
         var subject = document()
         subject[.fullName] = "MIHCHYK"
-        subject.suggestedFields.insert(CrewField.fullName.rawValue)
+        subject.markSuggested(.fullName)
 
         subject[.fullName] = "MINCHUK"
 
@@ -77,7 +77,7 @@ final class SuggestedFieldTests: XCTestCase {
     func testSuggestionsSurviveEncodingSoTheWarningOutlastsARelaunch() throws {
         var subject = document()
         subject[.fullName] = "MIHCHYK"
-        subject.suggestedFields.insert(CrewField.fullName.rawValue)
+        subject.markSuggested(.fullName)
 
         let restored = try JSONDecoder().decode(CrewDocument.self, from: JSONEncoder().encode(subject))
         XCTAssertTrue(restored.isSuggested(.fullName), "a relaunch must not quietly launder a suggestion into a fact")
