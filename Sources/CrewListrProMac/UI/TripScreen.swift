@@ -13,6 +13,7 @@ struct TripScreen: View {
     @State private var boat = Boat(name: "")
     @State private var trip: Trip?
     @State private var loadedTripID: Trip.ID?
+    @State private var pendingRestore: SecureStore.Backup?
 
     var body: some View {
         DocumentGrid {
@@ -49,6 +50,10 @@ struct TripScreen: View {
                             kind: .verified,
                             message: "These four values are printed in the header boxes of the crew list a port authority receives."
                         )
+
+                        snapshots
+
+                        EarlierVersions()
                     }
                     // Capped for line length, then pushed left: the cap alone
                     // centres the block and leaves it adrift from the header.
@@ -91,6 +96,68 @@ struct TripScreen: View {
         boat.registrationPort = boat.registrationPort.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         boat.registrationNumber = boat.registrationNumber.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         save()
+    }
+
+    // MARK: - Snapshots
+
+    /// The store keeps the state it replaces on every save. This is the only
+    /// place an operator can see that history or step back into it.
+    private var snapshots: some View {
+        section("Earlier versions") {
+            if store.backups.isEmpty {
+                Text("No earlier versions yet. One is kept each time this trip changes.")
+                    .font(Theme.Font.meta)
+                    .foregroundStyle(Theme.inkTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 11)
+            } else {
+                ForEach(Array(store.backups.prefix(8).enumerated()), id: \.element.id) { index, backup in
+                    if index > 0 { rule }
+                    snapshotRow(backup)
+                }
+            }
+        }
+        .onAppear { Task { await store.refreshBackups() } }
+        .confirmationDialog(
+            "Restore this version?",
+            isPresented: Binding(get: { pendingRestore != nil }, set: { if !$0 { pendingRestore = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Restore", role: .destructive) {
+                if let backup = pendingRestore {
+                    Task { await store.restoreBackup(backup.id) }
+                }
+                pendingRestore = nil
+            }
+            Button("Cancel", role: .cancel) { pendingRestore = nil }
+        } message: {
+            Text("""
+            This replaces what is on this Mac now with \(pendingRestore.map(CrewStore.describe) ?? "an earlier version").
+
+            What you have now is kept as another version first, so you can step back again.
+            """)
+        }
+    }
+
+    private func snapshotRow(_ backup: SecureStore.Backup) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(backup.created.formatted(date: .abbreviated, time: .shortened))
+                    .font(Theme.Font.support)
+                    .foregroundStyle(Theme.ink)
+                Text(CrewStore.describe(backup))
+                    .font(Theme.Font.meta)
+                    .foregroundStyle(Theme.inkSecondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button("Restore") { pendingRestore = backup }
+                .buttonStyle(.philonQuiet)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
     }
 
     // MARK: - Pieces

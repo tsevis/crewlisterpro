@@ -308,6 +308,49 @@ final class CrewStore {
         }
     }
 
+    // MARK: - Snapshots
+    //
+    // The store keeps the state it replaces on every save. Surfacing that is
+    // the difference between a recovery path an operator has and one only
+    // someone reading release notes with a terminal open has.
+
+    private(set) var backups: [SecureStore.Backup] = []
+
+    func refreshBackups() async {
+        guard let secureStore else { return }
+        backups = await secureStore.backups()
+    }
+
+    /// A deliberate checkpoint, before something the operator expects to be risky.
+    func takeSnapshot() async {
+        guard let secureStore else { return }
+        _ = await secureStore.snapshot()
+        await refreshBackups()
+    }
+
+    /// Makes a snapshot current and reloads. The state it replaces is itself
+    /// snapshotted first, so this is undoable.
+    func restoreBackup(_ identifier: String) async {
+        guard let secureStore else { return }
+        busyMessage = "Restoring…"
+        defer { busyMessage = nil }
+        do {
+            data = try await secureStore.restore(identifier)
+            selectedTripID = data.trips.first?.id
+            selectedDocumentID = selectedTripDocuments.first?.id
+            await refreshBackups()
+        } catch {
+            errorMessage = Self.explain(error)
+        }
+    }
+
+    /// What a snapshot would restore, phrased for a list row.
+    nonisolated static func describe(_ backup: SecureStore.Backup) -> String {
+        let trips = "\(backup.trips) trip\(backup.trips == 1 ? "" : "s")"
+        let documents = "\(backup.documents) document\(backup.documents == 1 ? "" : "s")"
+        return "\(trips), \(documents)"
+    }
+
     // MARK: - The optional local model
 
     /// Whether the local vision model is on this Mac. The rescue action offers
@@ -447,6 +490,37 @@ final class CrewStore {
         guard let secureStore else { return }
         let names = [document.encryptedFileName] + document.imageRevisions
         Task { await secureStore.deleteOriginals(named: names.filter { !$0.isEmpty }) }
+    }
+
+    // MARK: - Earlier versions
+
+    /// The snapshots the store has kept of itself, newest first.
+    func backups() async -> [SecureStore.Backup] {
+        guard let secureStore else { return [] }
+        return await secureStore.backups()
+    }
+
+    /// Makes a snapshot current. `SecureStore.restore` snapshots the state it
+    /// replaces before writing, so this is itself undoable.
+    func restore(_ identifier: String) async {
+        guard let secureStore else { return }
+        do {
+            let recovered = try await secureStore.restore(identifier)
+            data = recovered
+            hasLoaded = true
+            // The previous selection may name a trip that no longer exists.
+            selectedTripID = data.trips.first?.id
+            selectedDocumentID = selectedTripDocuments.first?.id
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Takes a snapshot now, before something risky.
+    @discardableResult
+    func snapshot() async -> Bool {
+        guard let secureStore else { return false }
+        return await secureStore.snapshot()
     }
 
     /// Waits for any in-flight save to reach disk. Tests only: the UI never
