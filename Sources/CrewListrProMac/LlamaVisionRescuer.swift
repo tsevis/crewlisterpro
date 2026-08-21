@@ -41,8 +41,9 @@ enum RescueError: LocalizedError {
 actor LlamaVisionRescuer {
     private let endpoint = URL(string: "http://127.0.0.1:18081")!
 
-    func extract(imageData: Data) async throws -> [String: String] {
-        try await startIfNeeded()
+    func extract(imageData: Data, onPhase: (@Sendable (Phase) -> Void)? = nil) async throws -> [String: String] {
+        try await startIfNeeded(onPhase: onPhase)
+        onPhase?(.reading)
         var request = URLRequest(url: endpoint.appending(path: "v1/chat/completions"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -110,16 +111,120 @@ actor LlamaVisionRescuer {
         return MRZ.date(String(format: "%02d%02d%02d", year, month, day), kind: kind) ?? value
     }
 
-    private func startIfNeeded() async throws {
-        if (try? await URLSession.shared.data(from: endpoint.appending(path: "health"))) != nil { return }
+    /// Where the rescue has got to, so the operator is told the difference
+    /// between "loading a 5.78 GB model" and "hung".
+    enum Phase: Sendable, Equatable {
+        case startingRuntime
+        case loadingModel(elapsed: TimeInterval)
+        case reading
+    }
+
+    private func startIfNeeded(onPhase: (@Sendable (Phase) -> Void)?) async throws {
+        try await LocalRuntime.shared.start(endpoint: endpoint, onPhase: onPhase)
+    }
+}
+
+/// Owns the one llama-server this app may run.
+///
+/// Every rescue used to construct a fresh rescuer with no shared state, so a
+/// second attempt while the first was still loading spawned another server —
+/// two concurrent 8B loads on one machine. Serialising through an actor means
+/// a rescue during a load waits for the server already coming up.
+actor LocalRuntime {
+    static let shared = LocalRuntime()
+
+    private var process: Process?
+
+    /// Long enough for a cold load of an 8B model with its projector, which is
+    /// minutes on a laptop. The previous 7.5 seconds meant the first rescue an
+    /// operator ever attempted always failed, left the server loading in the
+    /// background, and then mysteriously worked on the second try.
+    private static let loadTimeout: TimeInterval = 15 * 60
+
+    func start(endpoint: URL, onPhase: (@Sendable (LlamaVisionRescuer.Phase) -> Void)?) async throws {
+        if await Self.isHealthy(endpoint) { return }
+
+        if process?.isRunning != true {
+            onPhase?(.startingRuntime)
+            process = try await Self.spawn()
+        }
+
+        let began = Date()
+        while true {
+            do {
+                try Task.checkCancellation()
+            } catch {
+                // Stopping a ten-minute load is a choice the operator is
+                // entitled to make, and leaving the server behind would make
+                // the next attempt spawn a second one.
+                await stop()
+                throw error
+            }
+
+            if await Self.isHealthy(endpoint) { return }
+
+            let elapsed = Date().timeIntervalSince(began)
+            guard elapsed < Self.loadTimeout else {
+                await stop()
+                throw RescueError.runtimeDidNotStart
+            }
+            onPhase?(.loadingModel(elapsed: elapsed))
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+    }
+
+    /// SIGTERM to a process mmap-ing five gigabytes is a request, not an
+    /// outcome. This waits, then insists.
+    func stop() async {
+        guard let running = process, running.isRunning else { process = nil; return }
+        running.terminate()
+        for _ in 0..<20 {
+            if !running.isRunning { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        if running.isRunning { kill(running.processIdentifier, SIGKILL) }
+        process = nil
+    }
+
+    private static func isHealthy(_ endpoint: URL) async -> Bool {
+        var request = URLRequest(url: endpoint.appending(path: "health"))
+        request.timeoutInterval = 2
+        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return false }
+        return (response as? HTTPURLResponse)?.statusCode == 200
+    }
+
+    /// Where llama-server might be: an explicit override, this app's bundle,
+    /// then the machine's PATH.
+    ///
+    /// PATH matters. Anyone already running local models has this binary
+    /// installed — this user has it at ~/.local/bin — and looking only in the
+    /// bundle reports "the local AI runtime is missing from this build" about a
+    /// runtime that is sitting on the machine.
+    static func runtimeExecutable() -> String? {
+        if let override = ProcessInfo.processInfo.environment["CREWLISTR_LLAMA_SERVER"],
+           FileManager.default.isExecutableFile(atPath: override) {
+            return override
+        }
+        if let bundled = Bundle.main.url(forResource: "llama-server", withExtension: nil)?.path,
+           FileManager.default.isExecutableFile(atPath: bundled) {
+            return bundled
+        }
+        let path = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/local/bin:/usr/bin:/bin"
+        let searched = path.split(separator: ":").map(String.init)
+            + ["\(NSHomeDirectory())/.local/bin", "/opt/homebrew/bin"]
+        return searched
+            .map { URL(fileURLWithPath: $0).appending(path: "llama-server").path(percentEncoded: false) }
+            .first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    private static func spawn() async throws -> Process {
         let manager = try ModelManager()
-        guard await manager.isReady(.qwen3VL8BQ4) else { throw RescueError.modelNotInstalled }
         guard let model = await manager.resolvedURL(for: ModelManifest.qwen3VL8BQ4.assets[0]),
               let projector = await manager.resolvedURL(for: ModelManifest.qwen3VL8BQ4.assets[1]) else {
             throw RescueError.modelNotInstalled
         }
-        let executable = ProcessInfo.processInfo.environment["CREWLISTR_LLAMA_SERVER"] ?? Bundle.main.url(forResource: "llama-server", withExtension: nil)?.path
-        guard let executable else { throw RescueError.runtimeMissing }
+        guard let executable = Self.runtimeExecutable() else { throw RescueError.runtimeMissing }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = [
@@ -129,12 +234,9 @@ actor LlamaVisionRescuer {
             "--mmproj", projector.path(percentEncoded: false),
             "--host", "127.0.0.1", "--port", "18081", "--no-webui",
         ]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         try process.run()
-        for _ in 0..<30 {
-            try await Task.sleep(for: .milliseconds(250))
-            if (try? await URLSession.shared.data(from: endpoint.appending(path: "health"))) != nil { return }
-        }
-        process.terminate()
-        throw RescueError.runtimeDidNotStart
+        return process
     }
 }

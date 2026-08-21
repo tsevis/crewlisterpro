@@ -439,11 +439,15 @@ final class CrewStore {
     func rescueSelectedDocumentWithLocalAI() {
         guard let id = selectedDocumentID, let document = data.documents.first(where: { $0.id == id }), let secureStore else { return }
         activity = .indeterminate("Asking the local model", detail: document.originalName)
-        Task {
+        let work = Task { [weak self] in
+            guard let self else { return }
             defer { activity = nil }
             do {
                 let original = try await secureStore.readOriginal(named: document.encryptedFileName)
-                let suggested = try await LlamaVisionRescuer().extract(imageData: original)
+                let name = document.originalName
+                let suggested = try await LlamaVisionRescuer().extract(imageData: original) { phase in
+                    Task { @MainActor [weak self] in self?.report(phase, document: name) }
+                }
                 guard let index = data.documents.firstIndex(where: { $0.id == id }) else { return }
                 for (key, value) in suggested where data.documents[index].fields[key, default: ""].isEmpty {
                     data.documents[index].fields[key] = value
@@ -451,7 +455,29 @@ final class CrewStore {
                 data.documents[index].riskReasons.append("Local AI suggestions added; all remain unverified.")
                 refreshRisk(at: index)
                 persist()
+            } catch is CancellationError {
+                // Backing out of a ten-minute load is a choice, not a failure.
             } catch { errorMessage = Self.explain(error) }
+        }
+        cancellableWork = work
+    }
+
+    /// The first rescue on a machine loads an 8B model, which takes minutes.
+    /// Reported as sustained so it lands in the strip with a way out — a
+    /// spinner for ten minutes is indistinguishable from a hang, and the
+    /// operator deserves to know which one they are looking at.
+    private func report(_ phase: LlamaVisionRescuer.Phase, document: String) {
+        switch phase {
+        case .startingRuntime:
+            activity = Activity(title: "Starting the local AI model",
+                                detail: "First use since launch",
+                                fraction: nil, isCancellable: true, style: .sustained)
+        case .loadingModel(let elapsed):
+            activity = Activity(title: "Loading the local AI model",
+                                detail: "\(Int(elapsed))s · about 8 GB into memory, several minutes on first use",
+                                fraction: nil, isCancellable: true, style: .sustained)
+        case .reading:
+            activity = .indeterminate("Reading the document with the local model", detail: document)
         }
     }
 
