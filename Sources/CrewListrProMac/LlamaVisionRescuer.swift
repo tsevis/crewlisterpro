@@ -89,11 +89,11 @@ actor LlamaVisionRescuer {
     /// What the model asks for, built from `CrewField.rescuable` so the request
     /// and the filter below cannot drift apart.
     ///
-    /// Deliberately minimal, after measuring three earlier versions against two
-    /// real passports. Every instruction added to steer the NAME changed how the
+    /// Deliberately minimal, after measuring four versions against real
+    /// passports. Every instruction added to steer the NAME changed how the
     /// model read the rest of the image:
     ///
-    ///   name asked for, no steering   both dates correct; names in Cyrillic
+    ///   name asked for, no steering   names in Cyrillic
     ///   "give the Latin form"         one document perfect; the other invented
     ///                                 MIHCHYK for a page printing MINCHUK
     ///   "copy, do not transliterate"  the invented name stopped, but the
@@ -101,42 +101,53 @@ actor LlamaVisionRescuer {
     ///                                 with June read as April — a field the
     ///                                 instruction never mentioned
     ///
-    /// Three prompts, two documents, no version correct on both, and the damage
-    /// spread to fields the instruction never named. So the name is not asked
-    /// for at all: not asked, rather than asked and discarded, because the
-    /// asking itself was what perturbed the reading.
+    /// So nothing is asked for beyond the fields that are kept: not asked,
+    /// rather than asked and discarded, because the asking itself perturbed the
+    /// reading.
     ///
-    /// This wording is a fourth version, so it was measured the same way rather
-    /// than assumed: five real passports, this prompt against the previous one,
-    /// same images, same run. Document number and birth date came back
-    /// character-for-character identical on all five — dropping the name cost
-    /// nothing on the fields that are kept — and the expiry date, which the
-    /// previous prompt never asked for, came back on all five as well.
+    /// The dates were asked for until they were checked. Against the app's own
+    /// MRZ-derived export of the same documents, three of ten date values were
+    /// wrong — 2027-07-22 read as 2022-07-27, 2029-05-28 as 2028-05-29,
+    /// 2013-03-09 as 2013-09-13 — while the document number was right on all
+    /// five. A transposed date is still a valid date, so no validator here can
+    /// object, and to this software a suggested date that validates looks
+    /// exactly like a confirmed one. That is why the request is now one field.
     ///
-    /// Identical is not correct, and the difference matters here. Checked
-    /// afterwards against the app's own MRZ-derived export of the same six
-    /// documents, both prompts got three of ten date values WRONG, in the same
-    /// way: an expiry of 2027-07-22 read as 2022-07-27, an expiry of 2029-05-28
-    /// read as 2028-05-29, a birth date of 2013-03-09 read as 2013-09-13. Two
-    /// of those are the day transposed with the last two digits of the year.
-    ///
-    /// Nothing in the app catches most of them — a transposed date is still a
-    /// valid date — which is why `markSuggested` and the review gate are the
-    /// load-bearing parts of this feature, not the prompt.
+    /// Narrowing the prompt made it a fifth version, so it was measured too:
+    /// the same five passports returned exactly one field each, and all five
+    /// document numbers match the export — FH010367, FH007206, GL720738,
+    /// GB262590, GL975714. Five versions in, that is the first result checked
+    /// against something with check digits behind it rather than against
+    /// another run of the same model.
     static let prompt = """
         Read only clearly visible identity-document fields. Reply with JSON keys \
-        \(CrewField.rescuable.map(\.rawValue).joined(separator: ", ")). \
-        Give dates as YYYY-MM-DD. Use empty strings when uncertain.
+        \(CrewField.rescuable.map(\.rawValue).joined(separator: ", ")).\(dateFormatInstruction) \
+        Use empty strings when uncertain.
         """
+
+    /// Added only while a date is actually being asked for. The model reads what
+    /// the page prints — "19 FEB 83" — and without this the rescue recovers a
+    /// value the operator has to retype before they can confirm it. It is
+    /// derived from `rescuable` rather than written into the prompt by hand, so
+    /// widening the policy back to dates brings the instruction back with it.
+    private static var dateFormatInstruction: String {
+        CrewField.rescuable.contains(where: { $0 == .birthDate || $0 == .expiryDate })
+            ? " Give dates as YYYY-MM-DD."
+            : ""
+    }
 
     /// The model's decoded reply, reduced to what the app will actually offer.
     ///
     /// Two separate jobs, and both belong here rather than at the call site.
     /// First the policy: anything outside `CrewField.rescuable` is dropped, even
     /// though the prompt did not ask for it, because a model that volunteers a
-    /// name is exactly as wrong as one that was asked for it. Second the shape:
-    /// dates are normalised out of what the page prints, and anything else is
-    /// held to Latin script.
+    /// name or a date unasked is exactly as wrong as one that was asked. Second
+    /// the shape: whatever survives is held to Latin script.
+    ///
+    /// The date branches are unreachable while `rescuable` is one field. They
+    /// stay because the policy is meant to be widened by editing that one list,
+    /// and a date arriving as "19 FEB 83" would otherwise reach the operator as
+    /// something they must retype before they can confirm it.
     static func usableFields(from decoded: [String: String]) -> [String: String] {
         let allowed = Set(CrewField.rescuable.map(\.rawValue))
         return decoded

@@ -48,33 +48,38 @@ enum CrewField: String, CaseIterable, Identifiable, Codable, Sendable {
     /// until every one of these is present and operator-verified.
     static let requiredForExport: [CrewField] = [.fullName, .documentNumber, .nationality, .birthDate, .sex]
 
-    /// The only fields the local vision model is allowed to offer.
+    /// The only field the local vision model is allowed to offer.
     ///
-    /// Measured against five real Ukrainian passports, checked afterwards
-    /// against the app's own MRZ-derived export of the same documents:
+    /// Measured against five real Ukrainian passports, then checked against the
+    /// app's own MRZ-derived export of the same documents — check digits behind
+    /// every value, confirmed by the operator:
     ///
     ///   document number   5 of 5 correct
     ///   birth date        4 of 5 correct
     ///   expiry date       3 of 5 correct
     ///
-    /// So this list is not "the fields it reads well". It is the document
-    /// number, which it reads well, and two dates it reads well enough to be
-    /// worth an operator's correction rather than their typing — offered only
-    /// because every one arrives marked as a machine guess and blocked from
-    /// export until a human confirms it against the image.
+    /// The dates were dropped on those figures. Three wrong values in ten, and
+    /// wrong in the worst available way: 2027-07-22 read as 2022-07-27 and
+    /// 2029-05-28 as 2028-05-29, the day transposed with the last two digits of
+    /// the year. A transposed date is still a valid date, so validation cannot
+    /// object; one of the two happened to land in the past and tripped the
+    /// expiry warning, and had it gone the other way an expired passport would
+    /// have read as valid in silence.
     ///
-    /// The name is excluded on stronger grounds than accuracy. It never came
-    /// back usable at all: Cyrillic, or transliterated into something invented —
-    /// a page printing MINCHUK produced MIHCHYK, which is pure ASCII and passes
-    /// every check this app makes. And each attempt to steer the name changed
-    /// how the model read the DATES, so instructing it about names cost
-    /// accuracy on the fields that were kept.
+    /// The name was never a candidate: it came back in Cyrillic, or
+    /// transliterated into something invented — a page printing MINCHUK
+    /// produced MIHCHYK, pure ASCII, passing every check this app makes.
     ///
-    /// So this is a declared policy rather than a habit of the rescuer: the
-    /// prompt asks for exactly these keys and the reply is filtered to exactly
-    /// these keys, both reading from here. Widening it means widening it in the
-    /// field vocabulary, where the reason above is written down.
-    static let rescuable: [CrewField] = [.documentNumber, .birthDate, .expiryDate]
+    /// What is left is the one field the model has never got wrong, and the one
+    /// an operator most wants recovered: a long alphanumeric string that is
+    /// tedious to type and easy to mistype. Everything else on a crew list is
+    /// theirs to enter.
+    ///
+    /// This is a declared policy rather than a habit of the rescuer: the prompt
+    /// asks for exactly these keys and the reply is filtered to exactly these
+    /// keys, both reading from here. Widening it means widening it in the field
+    /// vocabulary, where the measurements above are written down.
+    static let rescuable: [CrewField] = [.documentNumber]
 
     /// Display order in the review pane.
     static let reviewOrder: [CrewField] = [

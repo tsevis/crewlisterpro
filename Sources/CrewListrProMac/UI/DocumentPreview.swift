@@ -47,20 +47,19 @@ struct DocumentPreview: View {
             Text("""
             A one-time download that stays on this Mac. It is used only for \
             documents whose machine-readable zone could not be read, and it \
-            offers only three fields: document number, date of birth and date \
-            of expiry.
+            fills in one field: the document number.
 
-            It does not read names. On our test documents it returned the \
-            Cyrillic spelling or invented a Latin one, and asking it for a name \
-            made it read the dates worse.
+            That is all it offers because that is all it read reliably. On five \
+            test passports it got every document number right and three dates \
+            out of ten wrong — an expiry of 22 July 2027 came back as 27 July \
+            2022, which would make a valid passport look expired. A wrong date \
+            in the right format is not something this app can catch, so it no \
+            longer suggests dates at all.
 
-            The three fields it does offer are not reliable either. On five \
-            test passports it read every document number correctly and got \
-            three dates out of ten wrong — an expiry of 22 July 2027 came back \
-            as 27 July 2022, which would make a valid passport look expired. \
-            Check every suggestion against the image before confirming it.
-
-            Everything else in \(AppVersion.name) works without it.
+            The number it does suggest is still a guess. Check it against the \
+            image before confirming it. Everything else on the crew list is \
+            yours to type, and everything else in \(AppVersion.name) works \
+            without this model.
             """)
         }
         .task(id: document.imageRevisions.count) { await load() }

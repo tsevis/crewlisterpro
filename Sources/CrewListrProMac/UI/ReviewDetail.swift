@@ -202,10 +202,11 @@ private struct FieldRow: View {
                 // checking it is reading the same unreadable line the model
                 // guessed from.
                 //
-                // The example used to be MINCHUK read as MIHCHYK. The rescue no
-                // longer offers names (see `CrewField.rescuable`), so the
-                // warning now sits on a document number and two dates, and
-                // "character by character" is what checking those means.
+                // The example used to be MINCHUK read as MIHCHYK. The rescue
+                // offers neither names nor dates now (see `CrewField.rescuable`),
+                // so this warning sits on a document number alone — a long
+                // alphanumeric string where one transposed character is exactly
+                // what nothing downstream can catch.
                 if isSuggested {
                     HStack(alignment: .top, spacing: 4) {
                         Image(systemName: "sparkles").font(.system(size: 9))
