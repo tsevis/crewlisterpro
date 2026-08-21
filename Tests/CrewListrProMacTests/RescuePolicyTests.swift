@@ -5,11 +5,15 @@ import XCTest
 /// What the local vision model is allowed to contribute, and why the list is
 /// this short.
 ///
-/// Measured against two real Ukrainian passports across three prompt versions,
-/// six runs in total. The document number was correct every time. Both dates
-/// were correct on the shortest prompt. No version ever produced a usable Latin
-/// name — and every attempt to make it do so changed how the model read the
-/// dates, which it had been reading correctly.
+/// Measured against five real Ukrainian passports and then checked against the
+/// app's own MRZ-derived export of the same documents: the document number was
+/// correct 5 times out of 5, the birth date 4 out of 5, the expiry date 3 out
+/// of 5. No prompt version ever produced a usable Latin name — and every
+/// attempt to make it do so changed how the model read the dates.
+///
+/// The date figures are the reason `markSuggested` exists. They are not good
+/// enough for the output to be treated as a reading; they are good enough to be
+/// worth correcting rather than typing, which is a different claim.
 ///
 /// These tests exist so that widening the rescue is a deliberate act with a
 /// failing test attached, rather than a line quietly added to a prompt.
@@ -104,6 +108,43 @@ final class RescuePolicyTests: XCTestCase {
     func testACyrillicDocumentNumberIsStillDropped() {
         let usable = LlamaVisionRescuer.usableFields(from: ["document_number": "АВ1234567"])
         XCTAssertTrue(usable.isEmpty, "those are Cyrillic А and В; a port authority cannot read that as a number")
+    }
+
+    // MARK: - What the kept fields actually got wrong
+
+    /// The rescue's own failures, recorded so nobody has to rediscover them.
+    ///
+    /// Read from five real passports and compared against the app's export of
+    /// the same documents. Two of the three are the day transposed with the
+    /// last two digits of the year, which is the shape to watch for.
+    func testTheMeasuredWrongDatesAreStillWellFormedDates() {
+        let measured = [
+            (wrong: "2022-07-27", truth: "2027-07-22", field: CrewField.expiryDate),
+            (wrong: "2028-05-29", truth: "2029-05-28", field: CrewField.expiryDate),
+            (wrong: "2013-09-13", truth: "2013-03-09", field: CrewField.birthDate),
+        ]
+        for case let (wrong, truth, field) in measured {
+            XCTAssertNotEqual(wrong, truth)
+            XCTAssertNotNil(CrewFieldValidator.isoDate(wrong),
+                            "\(wrong) is a real date, which is exactly why nothing rejects it")
+            XCTAssertFalse(CrewFieldValidator.validate(field, value: wrong).isBlocking,
+                           "\(wrong) reaches the operator looking like every other value")
+        }
+    }
+
+    /// One of the three is catchable, and only by accident: reading 2027 as
+    /// 2022 puts the expiry in the past, and the app already warns about that.
+    /// It does not block, and it would say nothing at all had the transposition
+    /// gone the other way — an expired document read as valid.
+    func testOnlyTheExpiryPushedIntoThePastRaisesAnything() {
+        let past = CrewFieldValidator.validate(.expiryDate, value: "2022-07-27",
+                                               today: CrewFieldValidator.isoDate("2026-08-21")!)
+        XCTAssertEqual(past.message, "Document has expired.")
+        XCTAssertFalse(past.isBlocking, "a warning, not a block — the operator still has to look")
+
+        let future = CrewFieldValidator.validate(.expiryDate, value: "2028-05-29",
+                                                 today: CrewFieldValidator.isoDate("2026-08-21")!)
+        XCTAssertNil(future.message, "a year out on a future expiry is silent, and that is the common case")
     }
 
     func testAnEmptyValueIsNotOfferedAsARescue() {

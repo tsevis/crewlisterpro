@@ -52,9 +52,13 @@ struct DocumentPreview: View {
 
             It does not read names. On our test documents it returned the \
             Cyrillic spelling or invented a Latin one, and asking it for a name \
-            made it read the dates worse. What it does offer can still be wrong \
-            in a way that looks right — a June birth date came back as April — \
-            so check every suggestion against the image before confirming it.
+            made it read the dates worse.
+
+            The three fields it does offer are not reliable either. On five \
+            test passports it read every document number correctly and got \
+            three dates out of ten wrong — an expiry of 22 July 2027 came back \
+            as 27 July 2022, which would make a valid passport look expired. \
+            Check every suggestion against the image before confirming it.
 
             Everything else in \(AppVersion.name) works without it.
             """)

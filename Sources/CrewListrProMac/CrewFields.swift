@@ -50,14 +50,25 @@ enum CrewField: String, CaseIterable, Identifiable, Codable, Sendable {
 
     /// The only fields the local vision model is allowed to offer.
     ///
-    /// Measured against two real Ukrainian passports across three prompt
-    /// versions, six runs. The document number came back correct every time,
-    /// and both dates came back correct on the shortest prompt. The name never
-    /// did: it arrived in Cyrillic, or transliterated into something invented —
+    /// Measured against five real Ukrainian passports, checked afterwards
+    /// against the app's own MRZ-derived export of the same documents:
+    ///
+    ///   document number   5 of 5 correct
+    ///   birth date        4 of 5 correct
+    ///   expiry date       3 of 5 correct
+    ///
+    /// So this list is not "the fields it reads well". It is the document
+    /// number, which it reads well, and two dates it reads well enough to be
+    /// worth an operator's correction rather than their typing — offered only
+    /// because every one arrives marked as a machine guess and blocked from
+    /// export until a human confirms it against the image.
+    ///
+    /// The name is excluded on stronger grounds than accuracy. It never came
+    /// back usable at all: Cyrillic, or transliterated into something invented —
     /// a page printing MINCHUK produced MIHCHYK, which is pure ASCII and passes
-    /// every check this app makes. Worse, each attempt to steer the name
-    /// changed how the model read the DATES, so instructing it about names cost
-    /// accuracy on the fields it was good at.
+    /// every check this app makes. And each attempt to steer the name changed
+    /// how the model read the DATES, so instructing it about names cost
+    /// accuracy on the fields that were kept.
     ///
     /// So this is a declared policy rather than a habit of the rescuer: the
     /// prompt asks for exactly these keys and the reply is filtered to exactly

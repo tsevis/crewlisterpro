@@ -112,6 +112,17 @@ actor LlamaVisionRescuer {
     /// character-for-character identical on all five — dropping the name cost
     /// nothing on the fields that are kept — and the expiry date, which the
     /// previous prompt never asked for, came back on all five as well.
+    ///
+    /// Identical is not correct, and the difference matters here. Checked
+    /// afterwards against the app's own MRZ-derived export of the same six
+    /// documents, both prompts got three of ten date values WRONG, in the same
+    /// way: an expiry of 2027-07-22 read as 2022-07-27, an expiry of 2029-05-28
+    /// read as 2028-05-29, a birth date of 2013-03-09 read as 2013-09-13. Two
+    /// of those are the day transposed with the last two digits of the year.
+    ///
+    /// Nothing in the app catches most of them — a transposed date is still a
+    /// valid date — which is why `markSuggested` and the review gate are the
+    /// load-bearing parts of this feature, not the prompt.
     static let prompt = """
         Read only clearly visible identity-document fields. Reply with JSON keys \
         \(CrewField.rescuable.map(\.rawValue).joined(separator: ", ")). \
