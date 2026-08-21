@@ -5,7 +5,7 @@ import Observation
 /// encrypted store sees exactly one writer.
 @MainActor @Observable
 final class CrewStore {
-    private let secureStore: SecureStore?
+    private var secureStore: SecureStore?
     var data = AppData()
     var selectedTripID: UUID?
     var selectedDocumentID: UUID?
@@ -43,13 +43,41 @@ final class CrewStore {
     /// Opens the operator's encrypted store on this Mac. The app's entry point,
     /// and the ONLY initialiser that touches their real data.
     init() {
-        do { secureStore = try SecureStore() }
-        catch {
-            secureStore = nil
+        // Deliberately does no work. Opening the store touches the Keychain,
+        // and macOS may put an authorisation prompt in front of that — which it
+        // does on every rebuild, because an ad-hoc signature changes the code
+        // identity the key's ACL was granted to.
+        //
+        // This used to happen here, inside `App.init()`, before any window
+        // existed. The result was an app that was a Dock icon with nothing
+        // behind it, no error and nothing in the logs, for as long as the
+        // prompt went unanswered — indistinguishable from a hang, and it cost
+        // three debugging sessions before anyone sampled the process and found
+        // it parked in SecKeychainItemCopyContent.
+        Task { await openStore() }
+    }
+
+    /// True while the encrypted store is being opened, so the window can say so
+    /// rather than showing an empty workspace that looks like lost data.
+    private(set) var isOpening = true
+
+    private func openStore() async {
+        // Off the main actor: both the Keychain call and the SQLCipher open are
+        // blocking, and the window has to be able to draw while they run.
+        let opened = await Task.detached(priority: .userInitiated) { () -> Result<SecureStore, any Error> in
+            do { return .success(try SecureStore()) } catch { return .failure(error) }
+        }.value
+
+        switch opened {
+        case .success(let store):
+            secureStore = store
+            await load()
+        case .failure(let error):
+            // A locked Keychain or a full disk is a condition to explain, not a
+            // crash and not an empty window. RootView shows StorageFailureView.
             storageFailure = error.localizedDescription
-            return
         }
-        Task { await load() }
+        isOpening = false
     }
 
     /// A store backed by an explicitly supplied database, or by nothing at all.
@@ -63,7 +91,7 @@ final class CrewStore {
     /// pointed at a temporary directory.
     init(secureStore: SecureStore?) {
         self.secureStore = secureStore
-        guard secureStore != nil else { return }
+        guard secureStore != nil else { isOpening = false; return }
         Task { await load() }
     }
 
@@ -78,7 +106,11 @@ final class CrewStore {
     private(set) var hasLoaded = false
 
     func load() async {
-        guard let secureStore else { return }
+        guard let secureStore else { isOpening = false; return }
+        // Cleared here rather than only in `openStore`, so an injected store
+        // reaches the same state — otherwise the window sits on the opening
+        // screen forever for anything that did not come through `init()`.
+        defer { isOpening = false }
         do {
             data = try await secureStore.load()
             hasLoaded = true

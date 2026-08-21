@@ -65,6 +65,11 @@ struct RootView: View {
 
         if let failure = store.storageFailure {
             StorageFailureView(message: failure)
+        } else if store.isOpening {
+            // The store opens asynchronously so this window can exist while it
+            // does. macOS may be holding a Keychain prompt in front of it, and
+            // an empty workspace would read as lost data.
+            OpeningView()
         } else {
             VStack(spacing: 0) {
                 ScreenRow(
@@ -329,6 +334,23 @@ private struct PeopleScreen: View {
                 )
                 .frame(maxWidth: .infinity)
             }
+        }
+    }
+}
+
+/// Shown while the encrypted store is being opened.
+///
+/// Brief normally. Not brief when macOS decides the app's code identity has
+/// changed and asks for Keychain authorisation first — a rebuild does that
+/// every time — so it names that possibility rather than spinning silently.
+private struct OpeningView: View {
+    var body: some View {
+        PhilonEmptyState(
+            symbol: "lock.rotation",
+            title: "Opening the encrypted store",
+            message: "If macOS is asking for permission to use your Keychain, answer that first — the documents cannot be decrypted until it is granted."
+        ) {
+            ProgressView().controlSize(.small)
         }
     }
 }
