@@ -20,8 +20,16 @@ final class CrewListGenerationTests: XCTestCase {
         guard let dir = ProcessInfo.processInfo.environment["CREWLISTR_FIXTURES"] else {
             throw XCTSkip("Set CREWLISTR_FIXTURES to a directory of identity documents.")
         }
+        // Only identity documents. A directory an operator has also exported
+        // into contains crew lists, and a crew-list PDF is still a PDF — so
+        // exclude by name as well as by type, or the harness tries to read a
+        // machine-readable zone off its own output and reports the fixture set
+        // as broken.
+        let readable: Set<String> = ["jpg", "jpeg", "png", "heic", "tif", "tiff", "pdf"]
         return try FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: dir), includingPropertiesForKeys: nil)
             .filter { !$0.lastPathComponent.hasPrefix(".") }
+            .filter { readable.contains($0.pathExtension.lowercased()) }
+            .filter { !$0.lastPathComponent.hasPrefix("crew-list-") }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
