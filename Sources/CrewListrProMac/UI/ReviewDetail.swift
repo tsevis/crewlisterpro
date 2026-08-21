@@ -197,14 +197,19 @@ private struct FieldRow: View {
 
                 // A model's value looks exactly like a checksum-validated one
                 // unless the interface says otherwise. On a damaged document it
-                // can be confidently wrong — a passport printing MINCHUK
-                // produced MIHCHYK, which passes every rule here — and the
-                // operator checking it is reading the same unreadable line the
-                // model guessed from.
+                // can be confidently wrong — a June birth date came back as
+                // April, which passes every rule here — and the operator
+                // checking it is reading the same unreadable line the model
+                // guessed from.
+                //
+                // The example used to be MINCHUK read as MIHCHYK. The rescue no
+                // longer offers names (see `CrewField.rescuable`), so the
+                // warning now sits on a document number and two dates, and
+                // "character by character" is what checking those means.
                 if isSuggested {
                     HStack(alignment: .top, spacing: 4) {
                         Image(systemName: "sparkles").font(.system(size: 9))
-                        Text("Read by the local model, not from the machine-readable zone. Check it letter by letter.")
+                        Text("Read by the local model, not from the machine-readable zone. Check it character by character.")
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .font(Theme.Font.meta)

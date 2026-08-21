@@ -43,9 +43,15 @@ final class LocalRescueIntegrationTests: XCTestCase {
         // of the review gate is that nothing it says is trusted — its output
         // arrives unconfirmed like every other read. Asserting an exact
         // transcription would pin the test to one model's phrasing.
+        //
+        // The surname used to count as a hit here. It no longer can: the rescue
+        // is narrowed to `CrewField.rescuable`, so a name is filtered out even
+        // when the model reads it correctly. See `RescuePolicyTests`.
         let joined = fields.values.joined(separator: " ").uppercased()
-        XCTAssertTrue(joined.contains(specimen.surname) || joined.contains(specimen.number),
-                      "expected the surname or the document number somewhere in \(fields)")
+        XCTAssertTrue(joined.contains(specimen.number),
+                      "expected the document number somewhere in \(fields)")
+        XCTAssertNil(fields[CrewField.fullName.rawValue],
+                     "the rescue must not contribute a name, however confidently the model read one")
 
         // Whatever it returns has to be in the app's own vocabulary. The model
         // reads what is printed on the page — "19 FEB 83" — and a value the

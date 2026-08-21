@@ -48,6 +48,23 @@ enum CrewField: String, CaseIterable, Identifiable, Codable, Sendable {
     /// until every one of these is present and operator-verified.
     static let requiredForExport: [CrewField] = [.fullName, .documentNumber, .nationality, .birthDate, .sex]
 
+    /// The only fields the local vision model is allowed to offer.
+    ///
+    /// Measured against two real Ukrainian passports across three prompt
+    /// versions, six runs. The document number came back correct every time,
+    /// and both dates came back correct on the shortest prompt. The name never
+    /// did: it arrived in Cyrillic, or transliterated into something invented —
+    /// a page printing MINCHUK produced MIHCHYK, which is pure ASCII and passes
+    /// every check this app makes. Worse, each attempt to steer the name
+    /// changed how the model read the DATES, so instructing it about names cost
+    /// accuracy on the fields it was good at.
+    ///
+    /// So this is a declared policy rather than a habit of the rescuer: the
+    /// prompt asks for exactly these keys and the reply is filtered to exactly
+    /// these keys, both reading from here. Widening it means widening it in the
+    /// field vocabulary, where the reason above is written down.
+    static let rescuable: [CrewField] = [.documentNumber, .birthDate, .expiryDate]
+
     /// Display order in the review pane.
     static let reviewOrder: [CrewField] = [
         .fullName, .documentNumber, .documentType, .nationality, .birthDate, .sex, .expiryDate,

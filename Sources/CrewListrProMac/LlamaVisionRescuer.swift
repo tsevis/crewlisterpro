@@ -55,33 +55,9 @@ actor LlamaVisionRescuer {
         var request = URLRequest(url: endpoint.appending(path: "v1/chat/completions"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // Deliberately minimal, after measuring three versions against two real
-        // passports. Every instruction added to steer the NAME changed how the
-        // model read the rest of the image:
-        //
-        //   this prompt         both dates correct; names in Cyrillic, refused
-        //   "give the Latin form"   one document perfect; the other invented
-        //                           MIHCHYK for a page printing MINCHUK
-        //   "copy, do not transliterate"  the invented name stopped, but the
-        //                           document that had been perfect came back
-        //                           with June read as April — a field the
-        //                           instruction never mentioned
-        //
-        // Three prompts, two documents, no version correct on both. The lesson
-        // taken is not that the right wording is still out there: it is that
-        // more instruction perturbs more of the reading. This one asks for the
-        // fields and the date format and nothing else, and it is the only
-        // version that produced no wrong value on either document — the
-        // Cyrillic names it returns are refused by `latinised` rather than
-        // becoming plausible mistakes.
-        let prompt = """
-            Read only clearly visible identity-document fields. Reply with JSON keys \
-            full_name, document_number, nationality, birth_date, sex. \
-            Give birth_date as YYYY-MM-DD. Use empty strings when uncertain.
-            """
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": "local", "temperature": 0,
-            "messages": [["role": "user", "content": [["type": "text", "text": prompt], ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(imageData.base64EncodedString())"]]]]],
+            "messages": [["role": "user", "content": [["type": "text", "text": Self.prompt], ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(imageData.base64EncodedString())"]]]]],
         ])
         // A server that has answered `health` can still refuse work while it
         // finishes warming, so a refusal is retried rather than reported. The
@@ -106,21 +82,67 @@ actor LlamaVisionRescuer {
               let content = message["content"] as? String else {
             throw RescueError.unreadableReply
         }
-        let fields = try Self.decodeFields(from: content)
-        return fields
+        let decoded = try Self.decodeFields(from: content)
+        return Self.usableFields(from: decoded)
+    }
+
+    /// What the model asks for, built from `CrewField.rescuable` so the request
+    /// and the filter below cannot drift apart.
+    ///
+    /// Deliberately minimal, after measuring three earlier versions against two
+    /// real passports. Every instruction added to steer the NAME changed how the
+    /// model read the rest of the image:
+    ///
+    ///   name asked for, no steering   both dates correct; names in Cyrillic
+    ///   "give the Latin form"         one document perfect; the other invented
+    ///                                 MIHCHYK for a page printing MINCHUK
+    ///   "copy, do not transliterate"  the invented name stopped, but the
+    ///                                 document that had been perfect came back
+    ///                                 with June read as April — a field the
+    ///                                 instruction never mentioned
+    ///
+    /// Three prompts, two documents, no version correct on both, and the damage
+    /// spread to fields the instruction never named. So the name is not asked
+    /// for at all: not asked, rather than asked and discarded, because the
+    /// asking itself was what perturbed the reading.
+    ///
+    /// This wording is a fourth version, so it was measured the same way rather
+    /// than assumed: five real passports, this prompt against the previous one,
+    /// same images, same run. Document number and birth date came back
+    /// character-for-character identical on all five — dropping the name cost
+    /// nothing on the fields that are kept — and the expiry date, which the
+    /// previous prompt never asked for, came back on all five as well.
+    static let prompt = """
+        Read only clearly visible identity-document fields. Reply with JSON keys \
+        \(CrewField.rescuable.map(\.rawValue).joined(separator: ", ")). \
+        Give dates as YYYY-MM-DD. Use empty strings when uncertain.
+        """
+
+    /// The model's decoded reply, reduced to what the app will actually offer.
+    ///
+    /// Two separate jobs, and both belong here rather than at the call site.
+    /// First the policy: anything outside `CrewField.rescuable` is dropped, even
+    /// though the prompt did not ask for it, because a model that volunteers a
+    /// name is exactly as wrong as one that was asked for it. Second the shape:
+    /// dates are normalised out of what the page prints, and anything else is
+    /// held to Latin script.
+    static func usableFields(from decoded: [String: String]) -> [String: String] {
+        let allowed = Set(CrewField.rescuable.map(\.rawValue))
+        return decoded
+            .filter { allowed.contains($0.key) }
             .filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .reduce(into: [String: String]()) { result, entry in
                 switch entry.key {
                 case CrewField.birthDate.rawValue:
-                    result[entry.key] = Self.normalisedDate(entry.value, kind: .birth)
+                    result[entry.key] = normalisedDate(entry.value, kind: .birth)
                 case CrewField.expiryDate.rawValue:
-                    result[entry.key] = Self.normalisedDate(entry.value, kind: .expiry)
+                    result[entry.key] = normalisedDate(entry.value, kind: .expiry)
                 default:
                     // A value still carrying non-Latin script is dropped rather
                     // than offered. See `latinised`. A document number is the
                     // one field where digits are the point.
                     let digitsAllowed = entry.key == CrewField.documentNumber.rawValue
-                    if let latin = Self.latinised(entry.value, allowingDigits: digitsAllowed) {
+                    if let latin = latinised(entry.value, allowingDigits: digitsAllowed) {
                         result[entry.key] = latin
                     }
                 }
@@ -143,6 +165,12 @@ actor LlamaVisionRescuer {
     /// answered "МІНЧУК/МИНЧУК", two Cyrillic spellings where the page prints
     /// "МІНЧУК/MINCHUK", one of them invented. No name is better than a name
     /// that cannot go on the list, and far better than an invented one that can.
+    ///
+    /// The name is no longer rescued at all — see `CrewField.rescuable` — so
+    /// what this now guards in production is the document number, where the
+    /// same rule holds: Cyrillic А and В look like a passport number and are
+    /// not one. The name history stays because it is why the rule exists, and
+    /// because widening `rescuable` again would put it straight back in play.
     static func latinised(_ value: String, allowingDigits: Bool = false) -> String? {
         let words = value.split(separator: " ").map { word -> Substring in
             guard word.contains("/") else { return word }

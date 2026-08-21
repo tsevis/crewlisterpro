@@ -38,19 +38,23 @@ struct DocumentPreview: View {
         } message: {
             // The size and the privacy were already here; the accuracy was
             // not, and it is the part that should decide this. Measured on two
-            // real passports across three prompt versions: no version read
-            // both correctly, and the failures were plausible rather than
-            // obvious — a page printing MINCHUK produced MIHCHYK, and a June
-            // birth date came back as April. An operator weighing 5.78 GB
-            // deserves that more than they deserve the file size.
+            // real passports across three prompt versions: the document number
+            // came back right every time, the dates were right on the shortest
+            // prompt, and the name was never usable — a page printing MINCHUK
+            // produced MIHCHYK. So the feature no longer offers names, and this
+            // copy says so rather than warning about a risk it has stopped
+            // taking. A caveat that is visibly wrong stops being read.
             Text("""
             A one-time download that stays on this Mac. It is used only for \
-            documents whose machine-readable zone could not be read.
+            documents whose machine-readable zone could not be read, and it \
+            offers only three fields: document number, date of birth and date \
+            of expiry.
 
-            It is often wrong, and wrong in ways that look right: on our test \
-            documents it has misread names and dates into values that pass \
-            every check this app makes. Treat every suggestion as a guess to \
-            verify letter by letter against the image, never as a reading.
+            It does not read names. On our test documents it returned the \
+            Cyrillic spelling or invented a Latin one, and asking it for a name \
+            made it read the dates worse. What it does offer can still be wrong \
+            in a way that looks right — a June birth date came back as April — \
+            so check every suggestion against the image before confirming it.
 
             Everything else in \(AppVersion.name) works without it.
             """)
