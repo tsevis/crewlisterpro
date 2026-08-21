@@ -75,6 +75,10 @@ struct RootView: View {
 
                 commandLine
 
+                // A long operation keeps its place on every screen while it
+                // runs; the readiness banner belongs to People alone.
+                SustainedActivityStrip(activity: store.activity)
+
                 if screen == .people, store.selectedTripID != nil {
                     ReadinessBanner(blockers: store.exportBlockers)
                 }
@@ -86,7 +90,7 @@ struct RootView: View {
             // Philon's `.makers-mark`, pinned to the window rather than to a
             // panel, so no layout change can take it away.
             .overlay(alignment: .bottomLeading) { MakersMark() }
-            .overlay(alignment: .top) { BusyBanner(message: store.busyMessage) }
+            .overlay(alignment: .top) { ActivityBanner(activity: store.activity) }
             // Presentations hang off this concrete view. Attached to a Group
             // wrapping an if/else they bind to a view whose identity changes
             // and silently never present.
@@ -342,26 +346,6 @@ private struct StorageFailureView: View {
         ) {
             Button("Quit") { NSApplication.shared.terminate(nil) }
                 .buttonStyle(.philonPrimary)
-        }
-    }
-}
-
-private struct BusyBanner: View {
-    let message: String?
-
-    var body: some View {
-        if let message {
-            HStack(spacing: 9) {
-                ProgressView().controlSize(.small)
-                Text(message).font(Theme.Font.support).foregroundStyle(Theme.ink)
-            }
-            .padding(.horizontal, 13)
-            .padding(.vertical, 9)
-            .background(Theme.panel, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
-            .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
-            .padding(.top, 10)
-            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 }

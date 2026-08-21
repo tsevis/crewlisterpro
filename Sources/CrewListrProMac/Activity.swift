@@ -75,10 +75,18 @@ struct Activity: Equatable, Sendable, Identifiable {
     }
 
     /// Bytes transferred out of an expected total.
-    static func bytes(_ title: String, received: Int64, expected: Int64,
-                      cancellable: Bool = true, style: Style = .sustained) -> Activity {
+    /// One formatter, not one per update. The download reports roughly 5,800
+    /// times over 5.78 GB, and building a `ByteCountFormatter` each time is
+    /// pure waste on a path that runs that often.
+    private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
+        return formatter
+    }()
+
+    static func bytes(_ title: String, received: Int64, expected: Int64,
+                      cancellable: Bool = true, style: Style = .sustained) -> Activity {
+        let formatter = Self.byteFormatter
         let detail = expected > 0
             ? "\(formatter.string(fromByteCount: received)) of \(formatter.string(fromByteCount: expected))"
             : formatter.string(fromByteCount: received)
