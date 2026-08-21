@@ -33,6 +33,7 @@ struct FieldReviewPane: View {
                                 value: document[field],
                                 validation: document.validation(of: field),
                                 isVerified: document.isVerified(field),
+                            isSuggested: document.isSuggested(field),
                                 onEdit: { store.setField(field, to: $0, on: document.id) },
                                 onToggleVerified: { store.setVerified($0, field: field, on: document.id) }
                             )
@@ -141,6 +142,7 @@ private struct FieldRow: View {
     let value: String
     let validation: FieldValidation
     let isVerified: Bool
+    let isSuggested: Bool
     let onEdit: (String) -> Void
     let onToggleVerified: (Bool) -> Void
 
@@ -159,7 +161,10 @@ private struct FieldRow: View {
         switch validation {
         case .invalid: Theme.danger.opacity(0.55)
         case .warning: Theme.caution.opacity(0.5)
-        case .valid: focused ? Theme.accentText.opacity(0.55) : Theme.hairlineStrong
+        case .valid:
+            if focused { Theme.accentText.opacity(0.55) }
+            else if isSuggested { Theme.machine.opacity(0.5) }
+            else { Theme.hairlineStrong }
         }
     }
 
@@ -189,6 +194,22 @@ private struct FieldRow: View {
                     .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
                     .onChange(of: value) { _, newValue in if !focused { draft = newValue } }
                     .onAppear { draft = value }
+
+                // A model's value looks exactly like a checksum-validated one
+                // unless the interface says otherwise. On a damaged document it
+                // can be confidently wrong — a passport printing MINCHUK
+                // produced MIHCHYK, which passes every rule here — and the
+                // operator checking it is reading the same unreadable line the
+                // model guessed from.
+                if isSuggested {
+                    HStack(alignment: .top, spacing: 4) {
+                        Image(systemName: "sparkles").font(.system(size: 9))
+                        Text("Read by the local model, not from the machine-readable zone. Check it letter by letter.")
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .font(Theme.Font.meta)
+                    .foregroundStyle(Theme.machine)
+                }
 
                 if let message = validation.message {
                     HStack(alignment: .top, spacing: 4) {

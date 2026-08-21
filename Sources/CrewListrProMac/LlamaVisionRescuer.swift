@@ -58,10 +58,11 @@ actor LlamaVisionRescuer {
         let prompt = """
             Read only clearly visible identity-document fields. Reply with JSON keys \
             full_name, document_number, nationality, birth_date, sex. \
-            Passports print names and other fields in the local script and in Latin, \
-            separated by a slash. Give ONLY the Latin form, without the local script \
-            and without the slash. Give birth_date as YYYY-MM-DD and sex as M or F. \
-            Use empty strings when uncertain.
+            Passports print names in the local script and again in Latin, separated \
+            by a slash. COPY the Latin spelling exactly as it is printed on the page. \
+            Do NOT transliterate the local script yourself: if the Latin spelling is \
+            not legible, return an empty string for that field. A wrong name is worse \
+            than no name. Give birth_date as YYYY-MM-DD and sex as M or F.
             """
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": "local", "temperature": 0,

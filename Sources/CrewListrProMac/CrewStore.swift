@@ -483,6 +483,9 @@ final class CrewStore {
                 guard let index = data.documents.firstIndex(where: { $0.id == id }) else { return }
                 for (key, value) in suggested where data.documents[index].fields[key, default: ""].isEmpty {
                     data.documents[index].fields[key] = value
+                    // Marked, not merged silently. A value with no check digits
+                    // behind it must not be indistinguishable from one that has.
+                    data.documents[index].suggestedFields.insert(key)
                 }
                 data.documents[index].riskReasons.append("Local AI suggestions added; all remain unverified.")
                 refreshRisk(at: index)

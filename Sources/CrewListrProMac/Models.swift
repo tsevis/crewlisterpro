@@ -59,9 +59,23 @@ struct CrewDocument: Codable, Identifiable, Hashable {
     var riskReasons: [String] = []
     var fields: [String: String] = [:]
     var verifiedFields: Set<String> = []
+
+    /// Fields whose value came from the local vision model rather than from
+    /// the machine-readable zone.
+    ///
+    /// The distinction is not decorative. An MRZ value has check digits behind
+    /// it; a model's value has nothing behind it but a photograph, and on a
+    /// damaged document it can be confidently wrong in a way that looks right —
+    /// measured: a passport printing MINCHUK produced MIHCHYK, pure ASCII,
+    /// passing every validation rule there is. The operator confirming it is
+    /// looking at the same unreadable line the model guessed from, so the
+    /// interface has to tell them which values carry no arithmetic.
+    var suggestedFields: Set<String> = []
     var imageRevisions: [String] = []
 
     // MARK: - Field access
+
+    func isSuggested(_ field: CrewField) -> Bool { suggestedFields.contains(field.rawValue) }
 
     subscript(field: CrewField) -> String {
         get { fields[field.rawValue] ?? "" }
@@ -71,6 +85,9 @@ struct CrewDocument: Codable, Identifiable, Hashable {
             // Editing a value retracts its verification: the operator must
             // confirm what they typed, exactly as they confirm what OCR read.
             verifiedFields.remove(field.rawValue)
+            // And it stops being the model's suggestion: what the operator
+            // typed is theirs, however it got there.
+            suggestedFields.remove(field.rawValue)
             if field == .documentNumber { documentNumber = trimmed }
             if field == .documentType { documentType = trimmed.isEmpty ? "unknown" : trimmed }
         }
