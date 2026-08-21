@@ -2,36 +2,60 @@ import Foundation
 import XCTest
 @testable import CrewListrProMac
 
-/// Runs the real local-AI rescue against a real document.
+/// Runs the real local-AI rescue against real identity documents.
 ///
-/// Opt-in: CREWLISTR_RESCUE=<path to an image>. It starts llama-server and
-/// loads a 5 GB model, so it is a diagnostic, not part of the suite.
+/// Opt-in: `CREWLISTR_RESCUE` is a colon-separated list of image paths. The
+/// committed integration test uses a synthetic ICAO specimen, which is right for
+/// a suite but says nothing about a photographed passport whose name line the
+/// camera destroyed — the case the rescue exists for. This measures that.
+///
+/// It loads a 5 GB model, so it is a diagnostic, not part of the suite. All
+/// documents run in one process so the model loads once.
 final class RescueDiagnostic: XCTestCase {
 
-    func testRescueADocument() async throws {
-        guard let path = ProcessInfo.processInfo.environment["CREWLISTR_RESCUE"] else {
-            throw XCTSkip("Set CREWLISTR_RESCUE to an image path to exercise the local model.")
+    func testRescueRealDocuments() async throws {
+        guard let list = ProcessInfo.processInfo.environment["CREWLISTR_RESCUE"] else {
+            throw XCTSkip("Set CREWLISTR_RESCUE to colon-separated image paths.")
         }
-        let url = URL(fileURLWithPath: path)
-        let data = try Data(contentsOf: url)
-        print("\n--- rescuing \(url.lastPathComponent) (\(data.count) bytes) ---")
+        let paths = list.split(separator: ":").map(String.init)
+        XCTAssertFalse(paths.isEmpty)
 
-        let started = Date()
-        do {
-            let fields = try await LlamaVisionRescuer().extract(imageData: data)
-            print("  took \(String(format: "%.1f", Date().timeIntervalSince(started)))s")
-            for (key, value) in fields.sorted(by: { $0.key < $1.key }) {
-                print("  \(key): \(value)")
+        let rescuer = LlamaVisionRescuer()
+        var anySucceeded = false
+
+        for path in paths {
+            let url = URL(fileURLWithPath: path)
+            let data = try Data(contentsOf: url)
+            print("\n===== \(url.lastPathComponent)  (\(data.count) bytes) =====")
+
+            let started = Date()
+            nonisolated(unsafe) var lastPhase = ""
+            do {
+                let fields = try await rescuer.extract(imageData: data) { phase in
+                    let described = "\(phase)"
+                    if described != lastPhase {
+                        lastPhase = described
+                        FileHandle.standardError.write(Data("    [phase] \(described)\n".utf8))
+                    }
+                }
+                let elapsed = String(format: "%.1f", Date().timeIntervalSince(started))
+                print("  returned \(fields.count) field(s) in \(elapsed)s")
+                for key in CrewField.allCases.map(\.rawValue).sorted() {
+                    guard let value = fields[key] else { continue }
+                    print("    \(key.padding(toLength: 16, withPad: " ", startingAt: 0)) \(value)")
+                }
+                for (key, value) in fields.sorted(by: { $0.key < $1.key })
+                where !CrewField.allCases.map(\.rawValue).contains(key) {
+                    print("    (ignored downstream) \(key): \(value)")
+                }
+                anySucceeded = true
+            } catch {
+                let elapsed = String(format: "%.1f", Date().timeIntervalSince(started))
+                print("  FAILED after \(elapsed)s")
+                print("  \(CrewStore.explain(error))")
             }
-            XCTAssertFalse(fields.isEmpty, "the model returned nothing")
-            let known = Set(CrewField.allCases.map(\.rawValue))
-            for key in fields.keys where !known.contains(key) {
-                print("  (unrecognised key ignored downstream: \(key))")
-            }
-        } catch {
-            print("  FAILED after \(String(format: "%.1f", Date().timeIntervalSince(started)))s")
-            print("  \(CrewStore.explain(error))")
-            throw error
         }
+
+        XCTAssertTrue(anySucceeded, "the local model produced nothing for any document")
     }
 }

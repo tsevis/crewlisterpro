@@ -58,7 +58,10 @@ actor LlamaVisionRescuer {
         let prompt = """
             Read only clearly visible identity-document fields. Reply with JSON keys \
             full_name, document_number, nationality, birth_date, sex. \
-            Give birth_date as YYYY-MM-DD. Use empty strings when uncertain.
+            Passports print names and other fields in the local script and in Latin, \
+            separated by a slash. Give ONLY the Latin form, without the local script \
+            and without the slash. Give birth_date as YYYY-MM-DD and sex as M or F. \
+            Use empty strings when uncertain.
             """
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": "local", "temperature": 0,
@@ -91,10 +94,62 @@ actor LlamaVisionRescuer {
         return fields
             .filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .reduce(into: [String: String]()) { result, entry in
-                result[entry.key] = entry.key == CrewField.birthDate.rawValue || entry.key == CrewField.expiryDate.rawValue
-                    ? Self.normalisedDate(entry.value, kind: entry.key == CrewField.birthDate.rawValue ? .birth : .expiry)
-                    : entry.value
+                switch entry.key {
+                case CrewField.birthDate.rawValue:
+                    result[entry.key] = Self.normalisedDate(entry.value, kind: .birth)
+                case CrewField.expiryDate.rawValue:
+                    result[entry.key] = Self.normalisedDate(entry.value, kind: .expiry)
+                default:
+                    // A value still carrying non-Latin script is dropped rather
+                    // than offered. See `latinised`. A document number is the
+                    // one field where digits are the point.
+                    let digitsAllowed = entry.key == CrewField.documentNumber.rawValue
+                    if let latin = Self.latinised(entry.value, allowingDigits: digitsAllowed) {
+                        result[entry.key] = latin
+                    }
+                }
             }
+    }
+
+    /// The Latin half of a bilingual field, or nil when there is not one.
+    ///
+    /// Passports print fields twice: "ЦИГІПА/TSYHIPA", "УКРАЇНА/UKRAINE",
+    /// "Ж/F". Measured against two real Ukrainian passports, the model
+    /// transcribes both halves verbatim, and the consequences are not equal.
+    /// "Ж/F" fails validation, so the operator retypes it — visible and safe.
+    /// A Cyrillic full_name PASSES: no digits, long enough, no repeated-letter
+    /// run. It can be confirmed and reach a crew list in a script a port
+    /// authority will not accept.
+    ///
+    /// So the Latin side is taken per word — the halves pair up word by word,
+    /// not across the whole field — and anything still not Latin afterwards
+    /// returns nil for the caller to drop. On one of those passports the model
+    /// answered "МІНЧУК/МИНЧУК", two Cyrillic spellings where the page prints
+    /// "МІНЧУК/MINCHUK", one of them invented. No name is better than a name
+    /// that cannot go on the list, and far better than an invented one that can.
+    static func latinised(_ value: String, allowingDigits: Bool = false) -> String? {
+        let words = value.split(separator: " ").map { word -> Substring in
+            guard word.contains("/") else { return word }
+            return word.split(separator: "/").first { isLatin($0, allowingDigits: allowingDigits) } ?? word
+        }
+        let rebuilt = words.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        guard !rebuilt.isEmpty, isLatin(Substring(rebuilt), allowingDigits: allowingDigits) else { return nil }
+        return rebuilt
+    }
+
+    /// Letters the Latin alphabet actually has, plus what a printed name uses
+    /// to join them.
+    ///
+    /// Digits are excluded by default — a name is not a number, and the MRZ
+    /// parser already refuses name lines containing them — but a document
+    /// number is mostly digits, so it opts in. Getting that wrong silently
+    /// dropped "AB1234567" from a rescue that had read it correctly.
+    private static func isLatin(_ text: Substring, allowingDigits: Bool = false) -> Bool {
+        !text.isEmpty && text.allSatisfy { character in
+            guard character.isASCII else { return false }
+            if character.isLetter || " '-.".contains(character) { return true }
+            return allowingDigits && character.isNumber
+        }
     }
 
     /// The model reads what is printed on the page — "19 FEB 83" — and the app
