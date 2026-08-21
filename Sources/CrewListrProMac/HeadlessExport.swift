@@ -164,11 +164,18 @@ enum HeadlessExport {
             let documents = data.documents.filter { $0.tripID == trip.id }
             let cleared = documents.filter { $0.canExport() }.count
             let dates = "\(CrewFieldValidator.iso8601String(trip.departureDate)) → \(CrewFieldValidator.iso8601String(trip.returnDate))"
-            log("\(boat?.name ?? "Untitled yacht")  \(dates)  \(cleared)/\(documents.count) cleared")
+            // Marked, so `--list` does not present a put-away charter as though
+            // it were still being worked on.
+            let archived = trip.isArchived ? "  [archived]" : ""
+            log("\(boat?.name ?? "Untitled yacht")  \(dates)  \(cleared)/\(documents.count) cleared\(archived)")
         }
     }
 
-    private static func resolveTrip(in data: AppData, named name: String?) throws -> (Trip, Boat) {
+    /// Naming a trip searches every trip, archived included — a port authority
+    /// asking about last season has to be answerable. Omitting the name means
+    /// "the only trip there is", and there archived trips are skipped: putting
+    /// finished charters away is precisely what keeps that unambiguous.
+    static func resolveTrip(in data: AppData, named name: String?) throws -> (Trip, Boat) {
         guard !data.trips.isEmpty else { throw Failure.noTrips }
         let trip: Trip
         if let name {
@@ -179,8 +186,10 @@ enum HeadlessExport {
             guard let match else { throw Failure.unknownTrip(name) }
             trip = match
         } else {
-            guard data.trips.count == 1 else { throw Failure.ambiguousTrip(data.trips.count) }
-            trip = data.trips[0]
+            let candidates = data.trips.filter { !$0.isArchived }
+            guard !candidates.isEmpty else { throw Failure.noTrips }
+            guard candidates.count == 1 else { throw Failure.ambiguousTrip(candidates.count) }
+            trip = candidates[0]
         }
         guard let boat = data.boats.first(where: { $0.id == trip.boatID }) else { throw Failure.orphanedTrip }
         return (trip, boat)

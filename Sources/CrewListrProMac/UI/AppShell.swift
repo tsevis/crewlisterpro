@@ -248,16 +248,31 @@ struct TripPicker: View {
 
     var body: some View {
         Menu {
-            ForEach(store.data.trips) { trip in
-                Button {
-                    store.selectedTripID = trip.id
-                    store.selectedDocumentID = store.data.documents.first { $0.tripID == trip.id }?.id
-                } label: {
-                    Text("\(tripLabel(trip))  ·  \(readinessLabel(trip))")
+            ForEach(store.activeTrips) { trip in
+                tripButton(trip)
+            }
+            // Archived charters keep their own submenu rather than vanishing.
+            // A trip the picker cannot reach is a trip whose passport scans can
+            // be neither restored nor erased, so the way back is always here.
+            if !store.archivedTrips.isEmpty {
+                Menu("Archived") {
+                    ForEach(store.archivedTrips) { trip in
+                        tripButton(trip)
+                    }
                 }
             }
             Divider()
             Button("New Trip", action: onNewTrip)
+            if store.selectedTrip?.isArchived == true {
+                Button("Restore This Trip") {
+                    if let id = store.selectedTripID { store.restoreTrip(id) }
+                }
+            } else {
+                Button("Archive This Trip") {
+                    if let id = store.selectedTripID { store.archiveTrip(id) }
+                }
+                .disabled(store.selectedTripID == nil)
+            }
             Button("Delete This Trip…", role: .destructive, action: onDeleteTrip)
                 .disabled(store.selectedTripID == nil)
         } label: {
@@ -284,6 +299,16 @@ struct TripPicker: View {
         .buttonStyle(.philonQuiet)
         .fixedSize()
         .help("Switch between trips")
+    }
+
+    @ViewBuilder
+    private func tripButton(_ trip: Trip) -> some View {
+        Button {
+            store.selectedTripID = trip.id
+            store.selectedDocumentID = store.data.documents.first { $0.tripID == trip.id }?.id
+        } label: {
+            Text("\(tripLabel(trip))  ·  \(readinessLabel(trip))")
+        }
     }
 
     func tripLabel(_ trip: Trip) -> String {

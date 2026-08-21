@@ -224,7 +224,7 @@ final class CrewStore {
             data.boats.removeAll { $0.id == boatID }
         }
         if selectedTripID == id {
-            selectedTripID = data.trips.first?.id
+            selectedTripID = activeTrips.first?.id
             selectedDocumentID = nil
         }
         persist()
@@ -436,7 +436,7 @@ final class CrewStore {
         defer { activity = nil }
         do {
             data = try await secureStore.restore(identifier)
-            selectedTripID = data.trips.first?.id
+            selectedTripID = activeTrips.first?.id
             selectedDocumentID = selectedTripDocuments.first?.id
             await refreshBackups()
         } catch {
