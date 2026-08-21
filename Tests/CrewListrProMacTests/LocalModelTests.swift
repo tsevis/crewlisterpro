@@ -167,3 +167,26 @@ final class ModelResolutionTests: XCTestCase {
         }
     }
 }
+
+// MARK: - Diagnostic: is the model actually reachable on THIS Mac?
+
+/// Opt-in, and it reads the real environment rather than a fixture, so it is a
+/// diagnostic rather than a unit test: set CREWLISTR_CHECK_MODEL=1.
+/// Useful for confirming a resolution change before deleting a copy.
+final class LocalModelDiagnostic: XCTestCase {
+
+    func testTheModelResolvesOnThisMac() async throws {
+        guard ProcessInfo.processInfo.environment["CREWLISTR_CHECK_MODEL"] == "1" else {
+            throw XCTSkip("Set CREWLISTR_CHECK_MODEL=1 to check the real machine.")
+        }
+        let manager = try ModelManager()
+        for asset in ModelManifest.qwen3VL8BQ4.assets {
+            let resolved = await manager.resolvedURL(for: asset)
+            print("  \(asset.fileName) -> \(resolved?.path(percentEncoded: false) ?? "NOT FOUND")")
+            XCTAssertNotNil(resolved, "\(asset.fileName) could not be found anywhere")
+        }
+        let ready = await manager.isReady(.qwen3VL8BQ4)
+        print("  isReady -> \(ready)")
+        XCTAssertTrue(ready)
+    }
+}

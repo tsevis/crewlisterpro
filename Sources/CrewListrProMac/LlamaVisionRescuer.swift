@@ -46,7 +46,11 @@ actor LlamaVisionRescuer {
         var request = URLRequest(url: endpoint.appending(path: "v1/chat/completions"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let prompt = "Read only clearly visible identity-document fields. Reply with JSON keys full_name, document_number, nationality, birth_date, sex. Use empty strings when uncertain."
+        let prompt = """
+            Read only clearly visible identity-document fields. Reply with JSON keys \
+            full_name, document_number, nationality, birth_date, sex. \
+            Give birth_date as YYYY-MM-DD. Use empty strings when uncertain.
+            """
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": "local", "temperature": 0,
             "messages": [["role": "user", "content": [["type": "text", "text": prompt], ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(imageData.base64EncodedString())"]]]]],
@@ -61,7 +65,49 @@ actor LlamaVisionRescuer {
               let fields = try JSONSerialization.jsonObject(with: jsonData) as? [String: String] else {
             throw RescueError.unreadableReply
         }
-        return fields.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return fields
+            .filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .reduce(into: [String: String]()) { result, entry in
+                result[entry.key] = entry.key == CrewField.birthDate.rawValue || entry.key == CrewField.expiryDate.rawValue
+                    ? Self.normalisedDate(entry.value, kind: entry.key == CrewField.birthDate.rawValue ? .birth : .expiry)
+                    : entry.value
+            }
+    }
+
+    /// The model reads what is printed on the page — "19 FEB 83" — and the app
+    /// only accepts YYYY-MM-DD. Without this the rescue recovers the date and
+    /// then hands back a value the operator has to retype before they can
+    /// confirm it, which is most of the benefit thrown away.
+    ///
+    /// Anything unrecognised is returned untouched: the operator then corrects
+    /// one field, exactly as they would have before.
+    static func normalisedDate(_ value: String, kind: MRZ.DateKind) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if CrewFieldValidator.isoDate(trimmed) != nil { return trimmed }
+
+        let separators = CharacterSet(charactersIn: " -/.,")
+        let parts = trimmed.uppercased().components(separatedBy: separators).filter { !$0.isEmpty }
+        guard parts.count == 3, let day = Int(parts[0]), (1...31).contains(day) else { return value }
+
+        let months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+        let month: Int
+        if let numeric = Int(parts[1]), (1...12).contains(numeric) {
+            month = numeric
+        } else if let named = months.firstIndex(where: { parts[1].hasPrefix($0) }) {
+            month = named + 1
+        } else {
+            return value
+        }
+
+        guard let year = Int(parts[2]) else { return value }
+        if parts[2].count == 4 {
+            return String(format: "%04d-%02d-%02d", year, month, day)
+        }
+        guard parts[2].count == 2 else { return value }
+        // Two digits are ambiguous, and which way depends on what the date
+        // means. `MRZ.date` already decides that for birth and expiry; a second
+        // rule here would be one that could disagree with it.
+        return MRZ.date(String(format: "%02d%02d%02d", year, month, day), kind: kind) ?? value
     }
 
     private func startIfNeeded() async throws {
