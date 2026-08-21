@@ -140,14 +140,23 @@ enum MRZ {
               let day = Int(value.suffix(2)),
               (1...12).contains(month), (1...31).contains(day) else { return nil }
 
-        let currentYear = Calendar(identifier: .gregorian).component(.year, from: today)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let reference = calendar.dateComponents([.year, .month, .day], from: today)
+        guard let currentYear = reference.year,
+              let currentMonth = reference.month,
+              let currentDay = reference.day else { return nil }
         let century = currentYear - currentYear % 100
         let resolved: Int
         switch kind {
         case .birth:
-            // Latest year not in the future.
+            // Latest date not in the future. Compared as a full calendar date,
+            // not by year alone: a passport scanned in January whose holder was
+            // born this December-years-ago must pivot back a century, and a
+            // year-only comparison read it as a birth later this year.
             let candidate = century + year
-            resolved = candidate > currentYear ? candidate - 100 : candidate
+            let isFuture = (candidate, month, day) > (currentYear, currentMonth, currentDay)
+            resolved = isFuture ? candidate - 100 : candidate
         case .expiry:
             // An expiry may be long past, but cannot be far ahead: a passport
             // carries at most about ten years of validity. Pick the candidate
@@ -167,8 +176,6 @@ enum MRZ {
         components.year = resolved
         components.month = month
         components.day = day
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         guard let date = calendar.date(from: components),
               calendar.component(.day, from: date) == day else { return nil }
 

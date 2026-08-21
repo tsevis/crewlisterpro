@@ -103,6 +103,16 @@ final class MRZTests: XCTestCase {
         XCTAssertEqual(MRZ.date("280101", kind: .birth, today: today), "1928-01-01")
     }
 
+    /// A passport scanned in January whose MRZ birth year equals the current
+    /// year must not resolve to a birthday still ahead of the scan date.
+    func testABirthDateLaterThisYearPivotsBackACentury() {
+        let january = Date(timeIntervalSince1970: 1_768_435_200)  // 2026-01-15
+        XCTAssertEqual(MRZ.date("261225", kind: .birth, today: january), "1926-12-25")
+        // A birthday earlier in the current year genuinely is this year.
+        XCTAssertEqual(MRZ.date("260101", kind: .birth, today: today), "2026-01-01")
+        XCTAssertEqual(MRZ.date("260820", kind: .birth, today: today), "2026-08-20")
+    }
+
     func testAnExpiryOfTheWholeFixtureSetIsInTheFuture() {
         for specimen in [MRZFixtures.expiring2035, MRZFixtures.expiring2031, MRZFixtures.minor, MRZFixtures.adult] {
             let expiry = MRZ.parse(MRZFixtures.text(specimen))?["expiry_date"] ?? ""
