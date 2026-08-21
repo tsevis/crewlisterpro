@@ -36,10 +36,21 @@ struct DocumentPreview: View {
             }
             Button("Not Now", role: .cancel) {}
         } message: {
+            // The size and the privacy were already here; the accuracy was
+            // not, and it is the part that should decide this. Measured on two
+            // real passports across three prompt versions: no version read
+            // both correctly, and the failures were plausible rather than
+            // obvious — a page printing MINCHUK produced MIHCHYK, and a June
+            // birth date came back as April. An operator weighing 5.78 GB
+            // deserves that more than they deserve the file size.
             Text("""
             A one-time download that stays on this Mac. It is used only for \
-            documents whose machine-readable zone could not be read, and its \
-            suggestions still have to be confirmed field by field.
+            documents whose machine-readable zone could not be read.
+
+            It is often wrong, and wrong in ways that look right: on our test \
+            documents it has misread names and dates into values that pass \
+            every check this app makes. Treat every suggestion as a guess to \
+            verify letter by letter against the image, never as a reading.
 
             Everything else in \(AppVersion.name) works without it.
             """)

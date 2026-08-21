@@ -89,6 +89,12 @@ enum CrewFieldValidator {
             if trimmed.count < 2 { return .invalid("Too short to be a name.") }
             // No identity document carries digits in the name field.
             if trimmed.contains(where: { $0.isNumber }) { return .invalid("A name cannot contain digits.") }
+            // A crew list carries the Latin transliteration printed on the
+            // document, because that is what a port authority reads. A name in
+            // another script is legitimate on the page and unusable on the list.
+            if let offending = trimmed.first(where: { !isNameCharacter($0) }) {
+                return .invalid("A crew list needs the Latin spelling from the document — \"\(offending)\" is not Latin.")
+            }
             if trimmed.split(separator: " ").contains(where: looksLikeNoise) {
                 return .warning("Looks like OCR noise — check against the document.")
             }
@@ -111,6 +117,24 @@ enum CrewFieldValidator {
         case .expiryDate:
             guard let date = isoDate(trimmed) else { return .invalid("Use YYYY-MM-DD.") }
             return date < today ? .warning("Document has expired.") : .valid
+        }
+    }
+
+    /// Latin letters, and the punctuation names actually contain.
+    ///
+    /// Diacritics count: MÜLLER, ŁUKASZ and O'BRIEN are Latin spellings and a
+    /// port authority reads them without difficulty. Cyrillic, Greek, Arabic and
+    /// CJK do not, whatever the passport's own page shows — the document prints
+    /// both, and the crew list takes the Latin half.
+    static func isNameCharacter(_ character: Character) -> Bool {
+        if character == " " || character == "-" || character == "." { return true }
+        if character == "'" || character == "\u{2019}" { return true }
+        return character.unicodeScalars.allSatisfy { scalar in
+            (0x0041...0x005A).contains(scalar.value)     // A-Z
+                || (0x0061...0x007A).contains(scalar.value)   // a-z
+                || (0x00C0...0x024F).contains(scalar.value)   // Latin-1 Supplement .. Extended-B
+                || (0x1E00...0x1EFF).contains(scalar.value)   // Latin Extended Additional
+                || (0x0300...0x036F).contains(scalar.value)   // combining marks on the above
         }
     }
 

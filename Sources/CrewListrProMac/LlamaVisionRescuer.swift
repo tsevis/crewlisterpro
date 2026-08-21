@@ -55,14 +55,29 @@ actor LlamaVisionRescuer {
         var request = URLRequest(url: endpoint.appending(path: "v1/chat/completions"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Deliberately minimal, after measuring three versions against two real
+        // passports. Every instruction added to steer the NAME changed how the
+        // model read the rest of the image:
+        //
+        //   this prompt         both dates correct; names in Cyrillic, refused
+        //   "give the Latin form"   one document perfect; the other invented
+        //                           MIHCHYK for a page printing MINCHUK
+        //   "copy, do not transliterate"  the invented name stopped, but the
+        //                           document that had been perfect came back
+        //                           with June read as April — a field the
+        //                           instruction never mentioned
+        //
+        // Three prompts, two documents, no version correct on both. The lesson
+        // taken is not that the right wording is still out there: it is that
+        // more instruction perturbs more of the reading. This one asks for the
+        // fields and the date format and nothing else, and it is the only
+        // version that produced no wrong value on either document — the
+        // Cyrillic names it returns are refused by `latinised` rather than
+        // becoming plausible mistakes.
         let prompt = """
             Read only clearly visible identity-document fields. Reply with JSON keys \
             full_name, document_number, nationality, birth_date, sex. \
-            Passports print names in the local script and again in Latin, separated \
-            by a slash. COPY the Latin spelling exactly as it is printed on the page. \
-            Do NOT transliterate the local script yourself: if the Latin spelling is \
-            not legible, return an empty string for that field. A wrong name is worse \
-            than no name. Give birth_date as YYYY-MM-DD and sex as M or F.
+            Give birth_date as YYYY-MM-DD. Use empty strings when uncertain.
             """
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "model": "local", "temperature": 0,

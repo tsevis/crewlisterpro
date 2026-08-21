@@ -72,9 +72,15 @@ final class RescuedNameTests: XCTestCase {
 
     /// The gap that made this dangerous rather than merely wrong: validation
     /// has no opinion about script, so an unusable name arrives confirmable.
-    func testACyrillicNameWouldOtherwiseHavePassedValidation() {
+    /// This canary has fired, deliberately.
+    ///
+    /// It used to assert that validation did NOT block a Cyrillic name, so that
+    /// removing `latinised()` could not silently open the door. The operator has
+    /// since decided a crew list carries Latin only, so validation blocks it too
+    /// and `latinised()` is no longer the sole guard. Both now hold the line.
+    func testACyrillicNameIsBlockedByValidationAsWell() {
         let validation = CrewFieldValidator.validate(.fullName, value: "ЦИГІПА ДАР'Я")
-        XCTAssertFalse(validation.isBlocking,
-                       "if this ever starts blocking, latinised() is no longer the only thing standing between a Cyrillic name and a crew list")
+        XCTAssertTrue(validation.isBlocking,
+                      "a crew list carries the Latin spelling; validation must refuse anything else")
     }
 }

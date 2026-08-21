@@ -220,3 +220,62 @@ final class ModelTests: XCTestCase {
                        ["full_name", "document_number", "nationality", "birth_date", "sex", "expiry_date", "document_type"])
     }
 }
+
+// MARK: - A crew list carries Latin
+
+extension ModelTests {
+
+    private func nameCheck(_ value: String) -> FieldValidation {
+        CrewFieldValidator.validate(.fullName, value: value, today: Date(timeIntervalSince1970: 1_787_184_000))
+    }
+
+    func testAPlainLatinNamePasses() {
+        XCTAssertEqual(nameCheck("DARIA TSYHIPA"), .valid)
+        XCTAssertEqual(nameCheck("Anna Maria Eriksson"), .valid)
+    }
+
+    /// Diacritics are Latin. A port authority reads MÜLLER without difficulty,
+    /// and refusing them would block legitimate European names.
+    func testLatinNamesWithDiacriticsPass() {
+        for name in ["MÜLLER", "ŁUKASZ NOWAK", "JOSÉ MARÍA", "ØSTERGAARD", "FRANÇOIS"] {
+            XCTAssertEqual(nameCheck(name), .valid, name)
+        }
+    }
+
+    func testThePunctuationNamesActuallyContainPasses() {
+        for name in ["O'BRIEN", "O’BRIEN", "SMITH-JONES", "J. R. HARTLEY"] {
+            XCTAssertFalse(nameCheck(name).isBlocking, name)
+        }
+    }
+
+    /// The measured failure: the local model returned the Cyrillic printed on
+    /// the page, which was legitimate there and unusable on a crew list.
+    func testANameInAnotherScriptIsBlocked() {
+        for name in ["ЦИГІПА ДАР'Я", "МІНЧУК ОЛЕКСАНДР", "ΠΑΠΑΔΟΠΟΥΛΟΣ", "山田太郎"] {
+            XCTAssertTrue(nameCheck(name).isBlocking, "\(name) reached the crew list")
+        }
+    }
+
+    /// A name half-transliterated is the dangerous shape — it looks converted.
+    func testAMixedScriptNameIsBlocked() {
+        XCTAssertTrue(nameCheck("TSYHIPA ДАР'Я").isBlocking)
+    }
+
+    func testTheMessageNamesTheOffendingCharacter() {
+        guard case .invalid(let message) = nameCheck("ЦИГІПА DARIA") else {
+            return XCTFail("expected a blocking result")
+        }
+        XCTAssertTrue(message.contains("Ц"), "the operator is not shown what to fix: \(message)")
+        XCTAssertTrue(message.contains("Latin"), message)
+    }
+
+    /// Blocking beats warning here: a crew list with a name nobody at the port
+    /// can read is not a crew list, so it must not be confirmable.
+    func testAScriptFailureBlocksRatherThanWarns() {
+        XCTAssertFalse(nameCheck("МІНЧУК").isBlocking == false)
+        var document = completeDocument()
+        document.fields[CrewField.fullName.rawValue] = "МІНЧУК ОЛЕКСАНДР"
+        verifyAll(&document)
+        XCTAssertFalse(document.canExport(today: today), "a non-Latin name rode a stale confirmation onto the list")
+    }
+}
