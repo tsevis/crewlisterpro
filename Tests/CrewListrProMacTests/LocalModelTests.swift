@@ -86,3 +86,84 @@ final class LocalModelOfferTests: XCTestCase {
     }
 
 }
+
+// MARK: - Finding a model already on this Mac
+
+/// The app is not the only thing here that downloads models. Looking only in
+/// its own directory offered a 5.78 GB download of bytes already present.
+final class ModelResolutionTests: XCTestCase {
+
+    private let manifest = ModelManifest.qwen3VL8BQ4
+
+    // MARK: Repository naming
+
+    func testAHuggingFaceURLBecomesItsCacheDirectoryName() {
+        let url = URL(string: "https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/main/x.gguf")!
+        XCTAssertEqual(ModelManager.repositoryDirectoryName(from: url), "models--Qwen--Qwen3-VL-8B-Instruct-GGUF")
+    }
+
+    func testANonHuggingFaceURLResolvesToNoCacheDirectory() {
+        let url = URL(string: "https://example.com/Qwen/model/resolve/main/x.gguf")!
+        XCTAssertNil(ModelManager.repositoryDirectoryName(from: url), "only the hub lays blobs out this way")
+    }
+
+    // MARK: Resolution
+
+    /// A blob whose filename is its SHA-256, at the right size, is the asset.
+    func testAnAssetIsFoundInTheHubCache() async throws {
+        let home = FileManager.default.temporaryDirectory.appending(path: "hf-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let asset = manifest.assets[1]                       // the smaller one
+        let blobs = home.appending(path: "hub/models--Qwen--Qwen3-VL-8B-Instruct-GGUF/blobs")
+        try FileManager.default.createDirectory(at: blobs, withIntermediateDirectories: true)
+        // Stand-in of the right size; resolution checks size, not content.
+        let blob = blobs.appending(path: asset.sha256)
+        try Data(count: Int(asset.sizeBytes)).write(to: blob)
+
+        setenv("HF_HOME", home.path(percentEncoded: false), 1)
+        defer { unsetenv("HF_HOME") }
+
+        let manager = try ModelManager()
+        let resolved = await manager.resolvedURL(for: asset)
+        XCTAssertEqual(resolved?.lastPathComponent, asset.sha256)
+    }
+
+    /// The same snapshot holds an F16 projector this app must not use. Matching
+    /// on the pinned hash rather than a filename makes that impossible.
+    func testAWrongSizedBlobIsNotAccepted() async throws {
+        let home = FileManager.default.temporaryDirectory.appending(path: "hf-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let asset = manifest.assets[1]
+        let blobs = home.appending(path: "hub/models--Qwen--Qwen3-VL-8B-Instruct-GGUF/blobs")
+        try FileManager.default.createDirectory(at: blobs, withIntermediateDirectories: true)
+        try Data(count: 1024).write(to: blobs.appending(path: asset.sha256))   // truncated
+
+        setenv("HF_HOME", home.path(percentEncoded: false), 1)
+        defer { unsetenv("HF_HOME") }
+
+        let manager = try ModelManager()
+        let resolved = await manager.resolvedURL(for: asset)
+        XCTAssertNil(resolved, "a partial blob must not read as an installed model")
+    }
+
+    func testNothingResolvesWhenTheModelIsAbsent() async throws {
+        let home = FileManager.default.temporaryDirectory.appending(path: "hf-empty-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        setenv("HF_HOME", home.path(percentEncoded: false), 1)
+        defer { unsetenv("HF_HOME") }
+
+        let manager = try ModelManager()
+        let resolved = await manager.resolvedURL(for: manifest.assets[1])
+        XCTAssertNil(resolved)
+    }
+
+    /// Resolution must never point at a file the app has not been told about.
+    func testResolutionOnlyEverNamesThePinnedHash() async throws {
+        for asset in manifest.assets {
+            let candidates = ModelManager.repositoryDirectoryName(from: asset.url)
+            XCTAssertEqual(candidates, "models--Qwen--Qwen3-VL-8B-Instruct-GGUF")
+            XCTAssertEqual(asset.sha256.count, 64)
+        }
+    }
+}

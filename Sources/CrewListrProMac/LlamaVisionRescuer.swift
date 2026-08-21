@@ -68,13 +68,19 @@ actor LlamaVisionRescuer {
         if (try? await URLSession.shared.data(from: endpoint.appending(path: "health"))) != nil { return }
         let manager = try ModelManager()
         guard await manager.isReady(.qwen3VL8BQ4) else { throw RescueError.modelNotInstalled }
+        guard let model = await manager.resolvedURL(for: ModelManifest.qwen3VL8BQ4.assets[0]),
+              let projector = await manager.resolvedURL(for: ModelManifest.qwen3VL8BQ4.assets[1]) else {
+            throw RescueError.modelNotInstalled
+        }
         let executable = ProcessInfo.processInfo.environment["CREWLISTR_LLAMA_SERVER"] ?? Bundle.main.url(forResource: "llama-server", withExtension: nil)?.path
         guard let executable else { throw RescueError.runtimeMissing }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = [
-            "--model", await manager.localURL(for: ModelManifest.qwen3VL8BQ4.assets[0]).path(percentEncoded: false),
-            "--mmproj", await manager.localURL(for: ModelManifest.qwen3VL8BQ4.assets[1]).path(percentEncoded: false),
+            // Resolved, not assumed: the model may live in the HuggingFace
+            // cache rather than the app's own directory.
+            "--model", model.path(percentEncoded: false),
+            "--mmproj", projector.path(percentEncoded: false),
             "--host", "127.0.0.1", "--port", "18081", "--no-webui",
         ]
         try process.run()

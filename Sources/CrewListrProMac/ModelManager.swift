@@ -48,7 +48,67 @@ actor ModelManager {
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
+    /// Where a download would put this asset. Not necessarily where it is.
     func localURL(for asset: ModelAsset) -> URL { directory.appending(path: asset.fileName) }
+
+    /// Where the asset actually is, wherever that turns out to be.
+    ///
+    /// The app is not the only thing on this Mac that downloads models. Looking
+    /// only in its own directory made it offer to fetch 5.78 GB that was already
+    /// present — the operator had pulled the same model through llama.cpp months
+    /// earlier, and it was sitting in the HuggingFace cache.
+    ///
+    /// The HuggingFace hub stores blobs content-addressed: the filename IS the
+    /// SHA-256. Since the manifest already pins that hash, the lookup is exact
+    /// rather than a guess — there is no way to pick up a different quantisation
+    /// by matching a filename loosely, which matters here because the same
+    /// snapshot also holds an F16 mmproj this app must not use.
+    func resolvedURL(for asset: ModelAsset) -> URL? {
+        for candidate in [localURL(for: asset)] + Self.hubBlobURLs(for: asset) {
+            guard let size = try? FileManager.default.attributesOfItem(
+                atPath: candidate.path(percentEncoded: false)
+            )[.size] as? Int64 else { continue }
+            // Size is the cheap guard against a truncated or partial file.
+            // Re-hashing five gigabytes on every readiness check would cost
+            // minutes; the hub's own content addressing carries the rest.
+            guard size == asset.sizeBytes else { continue }
+            return candidate
+        }
+        return nil
+    }
+
+    /// Candidate blob paths in the HuggingFace hub cache, honouring the
+    /// environment variables the Python tooling uses.
+    private static func hubBlobURLs(for asset: ModelAsset) -> [URL] {
+        guard let repository = repositoryDirectoryName(from: asset.url) else { return [] }
+        // HF_HOME and HUGGINGFACE_HUB_CACHE RELOCATE the cache in the Python
+        // tooling — they do not add a second place to look. Honour that: an
+        // operator who has moved their cache to another volume does not want
+        // this app quietly reading a stale copy from the default path.
+        let environment = ProcessInfo.processInfo.environment
+        let roots: [URL]
+        if let explicit = environment["HUGGINGFACE_HUB_CACHE"] {
+            roots = [URL(fileURLWithPath: explicit)]
+        } else if let home = environment["HF_HOME"] {
+            roots = [URL(fileURLWithPath: home).appending(path: "hub")]
+        } else {
+            roots = [
+                FileManager.default.homeDirectoryForCurrentUser
+                    .appending(path: ".cache").appending(path: "huggingface").appending(path: "hub")
+            ]
+        }
+        return roots.map {
+            $0.appending(path: repository).appending(path: "blobs").appending(path: asset.sha256)
+        }
+    }
+
+    /// `https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/resolve/...`
+    /// becomes `models--Qwen--Qwen3-VL-8B-Instruct-GGUF`.
+    static func repositoryDirectoryName(from url: URL) -> String? {
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard parts.count >= 2, url.host()?.contains("huggingface.co") == true else { return nil }
+        return "models--\(parts[0])--\(parts[1])"
+    }
 
     /// Downloads one asset to a temporary file, reporting bytes as they arrive
     /// and honouring cancellation. A cancelled transfer deletes its partial file
@@ -105,7 +165,9 @@ actor ModelManager {
         return hasher.finalize().compactMap { String(format: "%02x", $0) }.joined()
     }
 
-    func isReady(_ manifest: ModelManifest) -> Bool { manifest.assets.allSatisfy { FileManager.default.fileExists(atPath: localURL(for: $0).path(percentEncoded: false)) } }
+    func isReady(_ manifest: ModelManifest) -> Bool {
+        manifest.assets.allSatisfy { resolvedURL(for: $0) != nil }
+    }
 
     /// Call only after the UI presents storage use and obtains explicit consent.
     ///
@@ -120,7 +182,9 @@ actor ModelManager {
         let totalBytes = manifest.totalBytes
         var received: Int64 = 0
         for asset in manifest.assets {
-            guard !FileManager.default.fileExists(atPath: localURL(for: asset).path(percentEncoded: false)) else {
+            // Anything already on this Mac — ours or someone else's — is not
+            // downloaded again.
+            guard resolvedURL(for: asset) == nil else {
                 received += asset.sizeBytes
                 onProgress?(received, totalBytes)
                 continue
