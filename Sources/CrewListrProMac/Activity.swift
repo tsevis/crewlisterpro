@@ -26,11 +26,24 @@ struct Activity: Equatable, Sendable, Identifiable {
     /// stoppable; a two-second image rotation need not be.
     var isCancellable: Bool = false
 
+    /// How long the operator should expect this to last, which decides where it
+    /// is drawn. Stated rather than inferred from `isCancellable`: the two
+    /// happen to coincide today and there is no reason they must.
+    enum Style: Sendable, Equatable {
+        /// Seconds. A transient banner that comes and goes.
+        case transient
+        /// Minutes. Deserves a persistent place and a way out.
+        case sustained
+    }
+
+    var style: Style = .transient
+
     static func == (lhs: Activity, rhs: Activity) -> Bool {
         lhs.title == rhs.title
             && lhs.detail == rhs.detail
             && lhs.fraction == rhs.fraction
             && lhs.isCancellable == rhs.isCancellable
+            && lhs.style == rhs.style
     }
 
     /// Clamped, so a miscounted step cannot drive a bar past its end or
@@ -62,7 +75,8 @@ struct Activity: Equatable, Sendable, Identifiable {
     }
 
     /// Bytes transferred out of an expected total.
-    static func bytes(_ title: String, received: Int64, expected: Int64, cancellable: Bool = true) -> Activity {
+    static func bytes(_ title: String, received: Int64, expected: Int64,
+                      cancellable: Bool = true, style: Style = .sustained) -> Activity {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         let detail = expected > 0
@@ -72,7 +86,8 @@ struct Activity: Equatable, Sendable, Identifiable {
             title: title,
             detail: detail,
             fraction: expected > 0 ? Double(received) / Double(expected) : nil,
-            isCancellable: cancellable
+            isCancellable: cancellable,
+            style: style
         )
     }
 }

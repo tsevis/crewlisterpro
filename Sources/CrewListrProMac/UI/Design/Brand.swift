@@ -15,14 +15,23 @@ enum Brand {
     /// CrewListr Pro's own icon, masked to the macOS shape.
     static let appMark: NSImage? = load("AppMark")
 
+    /// Union Yachting's mark, and the photograph behind the info screen's
+    /// lockup — an aerial of a wake that happens to draw their own logo on the
+    /// water, which is why it is the key art rather than a stock sea.
+    static let unionMark: NSImage? = load("UnionMark")
+    static let unionBanner: NSImage? = load("UnionBanner", extension: "jpg")
+
+    static let unionName = "Union Yachting"
+    static let unionSite = URL(string: "https://www.unionyachting.com")!
+
     /// The person, for the mark's tooltip and accessibility label.
     static let makerName = "Charis Tsevis"
     /// The studio, for the credit line an operator reads on the info screen.
     static let studioName = "Tsevis Studio"
     static let makerSite = URL(string: "https://tsevis.com")!
 
-    private static func load(_ name: String) -> NSImage? {
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png"),
+    private static func load(_ name: String, extension ext: String = "png") -> NSImage? {
+        guard let url = Bundle.module.url(forResource: name, withExtension: ext),
               let image = NSImage(contentsOf: url) else { return nil }
         return image
     }

@@ -96,6 +96,14 @@ cat > "$APP/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
+# Finder metadata and resource forks travel with a copied file and make
+# codesign refuse the bundle outright: "resource fork, Finder information, or
+# similar detritus not allowed". Strip them before sealing.
+# Homebrew's dylibs are copied in mode 444, and xattr cannot clear attributes
+# on a file it cannot write.
+chmod -R u+w "$APP"
+xattr -cr "$APP"
+
 # The bundle seal must be applied last, after Info.plist and every payload is
 # in place, or `codesign -v` reports a sealed-resource mismatch and macOS
 # refuses to launch the app.

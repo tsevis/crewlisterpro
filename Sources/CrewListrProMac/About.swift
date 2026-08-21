@@ -33,11 +33,15 @@ enum About {
     an operator has looked at each one beside the image it came from.
     """
 
-    static let credit = "Developed by Tsevis Studio for Union Yachting and the Greek charter community."
+    /// Two credits, because they are two different claims: who built it, and
+    /// who it was built for. Each carries its own mark in the footer.
+    static let credit = "Developed by Tsevis Studio"
+    static let partnerCredit = "Union Yachting for the Greek charter community"
 
+    /// The two destinations behind the footer's marks.
     static let links: [(label: String, address: URL)] = [
-        ("tsevis.com", URL(string: "https://tsevis.com")!),
-        ("github.com/tsevis", URL(string: "https://github.com/tsevis")!),
+        ("tsevis.com", Brand.makerSite),
+        ("unionyachting.com", Brand.unionSite),
     ]
 
     /// The obligations and the sources.

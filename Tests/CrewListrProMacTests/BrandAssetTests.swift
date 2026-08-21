@@ -44,6 +44,37 @@ final class BrandAssetTests: XCTestCase {
         XCTAssertEqual(mark.size.width, mark.size.height, "the app mark must be square")
     }
 
+    // MARK: - Union Yachting
+
+    func testTheUnionMarkAndBannerLoad() throws {
+        XCTAssertNotNil(Brand.unionMark, "the Union Yachting mark did not resolve through Bundle.module")
+        XCTAssertNotNil(Brand.unionBanner, "the info screen's key art did not resolve through Bundle.module")
+    }
+
+    /// The banner fills a 640x250 lockup, so it has to be wider than that at
+    /// 2x and wide enough not to letterbox when scaled to fill.
+    func testTheBannerIsLargeEnoughAndWiderThanTheLockup() throws {
+        let banner = try XCTUnwrap(Brand.unionBanner)
+        XCTAssertGreaterThanOrEqual(banner.size.width, 1280)
+        XCTAssertGreaterThan(banner.size.width / banner.size.height, 1.0,
+                             "a portrait banner would crop to almost nothing in a 2.56:1 lockup")
+    }
+
+    func testTheUnionSiteIsHTTPS() {
+        XCTAssertEqual(Brand.unionSite.scheme, "https")
+        XCTAssertTrue(Brand.unionSite.host?.contains("unionyachting.com") == true)
+    }
+
+    func testTheUnionMarkSourcesAreInTheRepository() {
+        let resources = root.appending(path: "Sources/CrewListrProMac/Resources")
+        for name in ["UnionMark.png", "UnionBanner.jpg"] {
+            XCTAssertTrue(
+                FileManager.default.fileExists(atPath: resources.appending(path: name).path(percentEncoded: false)),
+                "missing Sources/CrewListrProMac/Resources/\(name)"
+            )
+        }
+    }
+
     func testTheMakerSiteIsHTTPS() {
         XCTAssertEqual(Brand.makerSite.scheme, "https")
     }

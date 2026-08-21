@@ -10,8 +10,28 @@ final class CrewStore {
     var selectedTripID: UUID?
     var selectedDocumentID: UUID?
     var errorMessage: String?
-    /// Non-nil while a long-running operation owns the UI (import, AI rescue).
-    var busyMessage: String?
+    /// The long-running operation in flight, if any, described well enough to
+    /// draw a determinate bar where the work can actually be measured.
+    var activity: Activity?
+
+    /// Kept so existing callers keep compiling while the UI adopts `activity`.
+    var busyMessage: String? {
+        get {
+            guard let activity else { return nil }
+            guard let detail = activity.detail else { return activity.title }
+            return "\(activity.title) — \(detail)"
+        }
+        set { activity = newValue.map { .indeterminate($0) } }
+    }
+
+    /// The task behind a cancellable activity, so the operator can stop it.
+    private var cancellableWork: Task<Void, Never>?
+
+    func cancelActivity() {
+        cancellableWork?.cancel()
+        cancellableWork = nil
+        activity = nil
+    }
     /// Set when the encrypted store could not be opened. The UI shows this
     /// instead of the app dying: a failed Keychain or disk is recoverable.
     private(set) var storageFailure: String?
@@ -144,10 +164,11 @@ final class CrewStore {
             return
         }
         guard let secureStore else { return }
-        busyMessage = sources.count == 1 ? "Reading document…" : "Reading \(sources.count) documents…"
-        defer { busyMessage = nil }
+        defer { activity = nil }
 
-        for source in sources {
+        for (index, source) in sources.enumerated() {
+            activity = .step("Reading documents", completed: index, total: sources.count,
+                             detail: source.lastPathComponent)
             do {
                 // Vision is synchronous and slow enough to freeze the window;
                 // run it off the main actor.
@@ -267,9 +288,9 @@ final class CrewStore {
 
     func editSelectedDocument(_ transform: @escaping @Sendable (Data) throws -> Data) {
         guard let id = selectedDocumentID, let document = data.documents.first(where: { $0.id == id }), let secureStore else { return }
-        busyMessage = "Applying image edit…"
+        activity = .indeterminate("Applying image edit")
         Task {
-            defer { busyMessage = nil }
+            defer { activity = nil }
             do {
                 let original = try await secureStore.readOriginal(named: document.encryptedFileName)
                 // Image work is CPU-bound; keep it off the main actor.
@@ -289,9 +310,9 @@ final class CrewStore {
     /// operator has already verified.
     func reanalyseSelectedDocument() {
         guard let id = selectedDocumentID, let document = data.documents.first(where: { $0.id == id }), let secureStore else { return }
-        busyMessage = "Re-reading document…"
+        activity = .indeterminate("Re-reading document", detail: document.originalName)
         Task {
-            defer { busyMessage = nil }
+            defer { activity = nil }
             do {
                 let original = try await secureStore.readOriginal(named: document.encryptedFileName)
                 let result = try await Task.detached(priority: .userInitiated) { try OCRService.extract(from: original) }.value
@@ -337,8 +358,8 @@ final class CrewStore {
     /// snapshotted first, so this is undoable.
     func restoreBackup(_ identifier: String) async {
         guard let secureStore else { return }
-        busyMessage = "Restoring…"
-        defer { busyMessage = nil }
+        activity = .indeterminate("Restoring an earlier version")
+        defer { activity = nil }
         do {
             data = try await secureStore.restore(identifier)
             selectedTripID = data.trips.first?.id
@@ -375,17 +396,34 @@ final class CrewStore {
     }
 
     /// Call only after the operator has seen the size and agreed.
+    ///
+    /// Reports real byte progress and can be stopped: several gigabytes with no
+    /// percentage and no way out is worse than no feature.
     func downloadLocalModel() async {
         guard !localModelIsInstalled else { return }
-        busyMessage = "Downloading \(localModelDescription)…"
-        defer { busyMessage = nil }
-        do {
-            let manager = try ModelManager()
-            try await manager.download(.qwen3VL8BQ4)
-            localModelIsInstalled = await manager.isReady(.qwen3VL8BQ4)
-        } catch {
-            errorMessage = Self.explain(error)
+        let work = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let manager = try ModelManager()
+                try await manager.download(.qwen3VL8BQ4) { received, expected in
+                    Task { @MainActor in
+                        self.activity = .bytes("Downloading the local AI model", received: received, expected: expected)
+                    }
+                }
+                let ready = await manager.isReady(.qwen3VL8BQ4)
+                await MainActor.run { self.localModelIsInstalled = ready }
+            } catch is CancellationError {
+                // Stopping is a choice, not a failure.
+            } catch {
+                await MainActor.run { self.errorMessage = Self.explain(error) }
+            }
         }
+        cancellableWork = work
+        activity = .bytes("Downloading the local AI model", received: 0,
+                          expected: ModelManifest.qwen3VL8BQ4.totalBytes)
+        await work.value
+        cancellableWork = nil
+        activity = nil
     }
 
     /// Errors reach the operator with their recovery suggestion attached; an
@@ -400,9 +438,9 @@ final class CrewStore {
 
     func rescueSelectedDocumentWithLocalAI() {
         guard let id = selectedDocumentID, let document = data.documents.first(where: { $0.id == id }), let secureStore else { return }
-        busyMessage = "Asking the local model…"
+        activity = .indeterminate("Asking the local model", detail: document.originalName)
         Task {
-            defer { busyMessage = nil }
+            defer { activity = nil }
             do {
                 let original = try await secureStore.readOriginal(named: document.encryptedFileName)
                 let suggested = try await LlamaVisionRescuer().extract(imageData: original)

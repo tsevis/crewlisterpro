@@ -50,6 +50,50 @@ actor ModelManager {
 
     func localURL(for asset: ModelAsset) -> URL { directory.appending(path: asset.fileName) }
 
+    /// Downloads one asset to a temporary file, reporting bytes as they arrive
+    /// and honouring cancellation. A cancelled transfer deletes its partial file
+    /// rather than leaving something that looks like a model.
+    private func streamToFile(
+        _ asset: ModelAsset,
+        alreadyReceived: Int64,
+        total: Int64,
+        onProgress: (@Sendable (Int64, Int64) -> Void)?
+    ) async throws -> URL {
+        let (stream, response) = try await URLSession.shared.bytes(from: asset.url)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw ModelDownloadError.offline }
+
+        let temporary = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).part")
+        FileManager.default.createFile(atPath: temporary.path(percentEncoded: false), contents: nil)
+        let handle = try FileHandle(forWritingTo: temporary)
+
+        var buffer = Data()
+        buffer.reserveCapacity(1 << 20)
+        var written: Int64 = 0
+        do {
+            for try await byte in stream {
+                buffer.append(byte)
+                if buffer.count >= (1 << 20) {
+                    try handle.write(contentsOf: buffer)
+                    written += Int64(buffer.count)
+                    buffer.removeAll(keepingCapacity: true)
+                    onProgress?(alreadyReceived + written, total)
+                    try Task.checkCancellation()
+                }
+            }
+            if !buffer.isEmpty {
+                try handle.write(contentsOf: buffer)
+                written += Int64(buffer.count)
+            }
+            try handle.close()
+        } catch {
+            try? handle.close()
+            try? FileManager.default.removeItem(at: temporary)
+            throw error
+        }
+        onProgress?(alreadyReceived + written, total)
+        return temporary
+    }
+
     /// Streams the file through SHA-256 a chunk at a time.
     private static func sha256(ofFileAt url: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
@@ -64,14 +108,25 @@ actor ModelManager {
     func isReady(_ manifest: ModelManifest) -> Bool { manifest.assets.allSatisfy { FileManager.default.fileExists(atPath: localURL(for: $0).path(percentEncoded: false)) } }
 
     /// Call only after the UI presents storage use and obtains explicit consent.
-    func download(_ manifest: ModelManifest) async throws {
+    ///
+    /// `onProgress` receives bytes-so-far and the manifest total, across all
+    /// assets, so a caller can draw one bar for the whole download rather than
+    /// one per file. Cancelling the surrounding task stops the transfer and
+    /// leaves nothing half-written in place.
+    func download(_ manifest: ModelManifest, onProgress: (@Sendable (Int64, Int64) -> Void)? = nil) async throws {
         let values = try directory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         let requiredBytes = manifest.assets.reduce(Int64(0)) { $0 + $1.sizeBytes }
         guard (values.volumeAvailableCapacityForImportantUsage ?? 0) > requiredBytes + 1_500_000_000 else { throw ModelDownloadError.insufficientDisk }
-        for asset in manifest.assets where !FileManager.default.fileExists(atPath: localURL(for: asset).path(percentEncoded: false)) {
+        let totalBytes = manifest.totalBytes
+        var received: Int64 = 0
+        for asset in manifest.assets {
+            guard !FileManager.default.fileExists(atPath: localURL(for: asset).path(percentEncoded: false)) else {
+                received += asset.sizeBytes
+                onProgress?(received, totalBytes)
+                continue
+            }
             do {
-                let (temporary, response) = try await URLSession.shared.download(from: asset.url)
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw ModelDownloadError.offline }
+                let temporary = try await streamToFile(asset, alreadyReceived: received, total: totalBytes, onProgress: onProgress)
                 // Hash by streaming. Reading a 5 GB model into memory to
                 // checksum it, then holding it again to write, needed ~10 GB of
                 // RAM for a file already sitting on disk.
@@ -82,6 +137,8 @@ actor ModelManager {
                 let destination = localURL(for: asset)
                 try? FileManager.default.removeItem(at: destination)
                 try FileManager.default.moveItem(at: temporary, to: destination)
+                received += asset.sizeBytes
+                onProgress?(received, totalBytes)
             } catch let error as ModelDownloadError { throw error }
             catch { throw ModelDownloadError.offline }
         }

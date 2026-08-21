@@ -89,9 +89,15 @@ final class AboutTests: XCTestCase {
                       "the info screen credit no longer names the studio")
     }
 
-    func testTheCreditNamesWhoItWasBuiltFor() {
-        XCTAssertTrue(About.credit.contains("Union Yachting"),
+    func testTheSecondCreditNamesWhoItWasBuiltFor() {
+        XCTAssertTrue(About.partnerCredit.contains(Brand.unionName),
                       "the credit no longer names who the app was built for")
+    }
+
+    func testTheFooterLinksReachBothTheStudioAndThePartner() {
+        let addresses = About.links.map(\.address.absoluteString)
+        XCTAssertTrue(addresses.contains { $0.contains("tsevis.com") })
+        XCTAssertTrue(addresses.contains { $0.contains("unionyachting.com") })
     }
 
     func testTheLegalTextDeclaresTheLicence() {

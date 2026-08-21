@@ -57,36 +57,42 @@ struct AboutScreen: View {
 
     private var keyArt: some View {
         ZStack(alignment: .bottomLeading) {
-            // Philon's ink is green-tinted, and its workspace glow is a green
-            // radial at 80% 0%. Both are re-based on the app's own blue —
-            // borrowed unchanged they left this banner the only green thing in
-            // the window once the accent moved.
+            // The lockup sits on the photograph, so it needs its own ground:
+            // dark at the bottom-left where the type is, clear at the top right
+            // where the wake is worth seeing.
             LinearGradient(
-                colors: [Color(red: 0.043, green: 0.071, blue: 0.125),   // #0B1220
-                         Color(red: 0.027, green: 0.043, blue: 0.078)],  // #070B14
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-
-            RadialGradient(
-                colors: [Color(red: 0.055, green: 0.267, blue: 0.616).opacity(0.55), .clear],
-                center: UnitPoint(x: 0.8, y: 0), startRadius: 0, endRadius: 320
-            )
-
-            CrewListMotif()
-                .padding(.trailing, 34)
-                .padding(.vertical, 26)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-
-            // `.splash-art::after` — transparent to 50%, then to 35% black, so
-            // the lockup keeps its contrast over whatever sits behind it.
-            LinearGradient(
-                stops: [.init(color: .clear, location: 0.5), .init(color: .black.opacity(0.35), location: 1)],
-                startPoint: .top, endPoint: .bottom
+                stops: [.init(color: .black.opacity(0.72), location: 0),
+                        .init(color: .black.opacity(0.30), location: 0.5),
+                        .init(color: .clear, location: 1)],
+                startPoint: .bottom, endPoint: .top
             )
 
             lockup
         }
+        .frame(maxWidth: .infinity)
         .frame(height: 250)
+        // The photograph goes in the BACKGROUND, not into the stack. A
+        // scaledToFill image inside the ZStack drives the stack to the image's
+        // own height, and the lockup then lays out against that oversized frame
+        // and lands below the 250pt the frame actually shows — which cut the
+        // title and icon in half. A background never affects its host's size.
+        .background {
+            if let banner = Brand.unionBanner {
+                // Union Yachting's own aerial: a wake that draws their mark on
+                // the water. A photograph of the sea these crew lists are for
+                // beats a diagram of a crew list.
+                Image(nsImage: banner)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                LinearGradient(
+                    colors: [Color(red: 0.043, green: 0.071, blue: 0.125),
+                             Color(red: 0.027, green: 0.043, blue: 0.078)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            }
+        }
         .clipped()
     }
 
@@ -167,23 +173,11 @@ struct AboutScreen: View {
             Rectangle().fill(Theme.hairline).frame(height: 1)
 
             HStack(spacing: 14) {
-                // The maker's mark again, at the size Philon's footer credit
-                // implies: the same claim as the window corner, spelled out.
-                if let mark = Brand.makersMark {
-                    Image(nsImage: mark).resizable().interpolation(.high).frame(width: 16, height: 16)
-                }
+                credit(mark: Brand.makersMark, text: About.credit,
+                       site: Brand.makerSite, label: Brand.makerName)
 
-                Text(About.credit)
-                    .font(Theme.Font.meta)
-                    .foregroundStyle(Theme.inkSecondary)
-
-                ForEach(About.links, id: \.address) { link in
-                    Button(link.label) { openURL(link.address) }
-                        .buttonStyle(.plain)
-                        .font(Theme.Font.meta)
-                        .foregroundStyle(Theme.accentText)
-                        .pointerStyle(.link)
-                }
+                credit(mark: Brand.unionMark, text: About.partnerCredit,
+                       site: Brand.unionSite, label: Brand.unionName)
 
                 Spacer(minLength: 8)
 
@@ -192,68 +186,33 @@ struct AboutScreen: View {
                     .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, Theme.Space.dialog)
-            .padding(.vertical, 14)
+            .padding(.vertical, 12)
             .background(Theme.ground)
         }
     }
-}
 
-// MARK: - The motif
-
-/// A crew list reduced to its geometry: the boxed header a port authority
-/// reads first, then the ruled rows underneath. Drawn from the same shapes
-/// `ExportService` prints, at low contrast, as key art rather than a preview.
-private struct CrewListMotif: View {
-    var body: some View {
-        GeometryReader { proxy in
-            let width = min(proxy.size.width, 216)
-            let scale = width / 216
-
-            VStack(alignment: .leading, spacing: 9 * scale) {
-                // Four header boxes: yacht, flag, port of registry, number.
-                HStack(spacing: 6 * scale) {
-                    ForEach(0..<4, id: \.self) { index in
-                        RoundedRectangle(cornerRadius: 2 * scale)
-                            .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
-                            .frame(height: 26 * scale)
-                            .overlay(alignment: .topLeading) {
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(Color.white.opacity(index == 0 ? 0.34 : 0.2))
-                                    .frame(width: (index == 0 ? 26 : 16) * scale, height: 3 * scale)
-                                    .padding(4 * scale)
-                            }
-                    }
+    /// A mark and the line beside it, the whole pair opening the site it names.
+    private func credit(mark: NSImage?, text: String, site: URL, label: String) -> some View {
+        Button { openURL(site) } label: {
+            HStack(spacing: 7) {
+                if let mark {
+                    Image(nsImage: mark)
+                        .resizable().interpolation(.high)
+                        .frame(width: 17, height: 17)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                 }
-
-                // SKIPPER, then the passenger rows.
-                ForEach(0..<7, id: \.self) { row in
-                    HStack(spacing: 7 * scale) {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Theme.accent.opacity(row == 0 ? 0.55 : 0.16))
-                            .frame(width: (row == 0 ? 34 : 22) * scale, height: 4 * scale)
-
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white.opacity(row == 0 ? 0.3 : 0.16))
-                            .frame(width: CGFloat(74 - (row % 3) * 11) * scale, height: 4 * scale)
-
-                        Spacer(minLength: 0)
-
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white.opacity(0.13))
-                            .frame(width: 30 * scale, height: 4 * scale)
-                    }
-                    .frame(height: 11 * scale)
-                    .overlay(alignment: .bottom) {
-                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                    }
-                }
+                Text(text)
+                    .font(Theme.Font.meta)
+                    .foregroundStyle(Theme.inkSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(width: width)
-            .rotation3DEffect(.degrees(17), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
-            .rotationEffect(.degrees(-4))
-            .opacity(0.9)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .contentShape(Rectangle())
         }
-        .frame(width: 216)
+        .buttonStyle(.plain)
+        .pointerStyle(.link)
+        .help(site.absoluteString)
+        .accessibilityLabel("\(text). Opens \(label)'s website.")
     }
 }
