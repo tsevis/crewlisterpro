@@ -200,3 +200,109 @@ final class BackupPresentationTests: XCTestCase {
         XCTAssertTrue(store.data.trips.isEmpty)
     }
 }
+
+// MARK: - What the Restore button actually does
+
+/// `CrewStore.restoreBackup(_:)` is the method behind the Restore button, and
+/// it replaces the entire store. Neither session could click it — no
+/// Accessibility — so it is exercised here instead, against a throwaway
+/// database, end to end.
+@MainActor
+final class RestoreThroughTheStoreTests: XCTestCase {
+    private var homes: [URL] = []
+
+    override func tearDownWithError() throws {
+        for home in homes { try? FileManager.default.removeItem(at: home) }
+        homes = []
+    }
+
+    private func populated(boat: String = "S/Y ANEMOS", documents: Int) -> AppData {
+        let boat = Boat(name: boat, flag: "GRC", registrationPort: "LAVRIO", registrationNumber: "GR-4471-P")
+        let trip = Trip(boatID: boat.id, departureDate: .now, returnDate: .now)
+        let people = (0..<documents).map { _ in CrewPerson(fullName: "YUKI NAKAMURA") }
+        let docs = people.map { person in
+            CrewDocument(tripID: trip.id, personID: person.id, originalName: "a.jpeg", encryptedFileName: "a.bin")
+        }
+        return AppData(boats: [boat], trips: [trip], people: people, documents: docs)
+    }
+
+    /// Save a real state, destroy it, restore it — the shape of today's incident.
+    func testRestoringBringsBackTheTripTheStoreLost() async throws {
+        let secure = try TemporaryStore.make(in: &homes)
+        try await secure.save(populated(documents: 6))
+        try await secure.save(AppData())          // the destructive write
+
+        let store = CrewStore(secureStore: secure)
+        await store.load()
+        XCTAssertTrue(store.data.trips.isEmpty, "precondition: the store is empty")
+
+        await store.refreshBackups()
+        let target = try XCTUnwrap(store.backups.first)
+        XCTAssertEqual(target.documents, 6)
+
+        await store.restoreBackup(target.id)
+
+        XCTAssertEqual(store.data.trips.count, 1, "the trip did not come back")
+        XCTAssertEqual(store.data.documents.count, 6)
+        XCTAssertEqual(store.data.boats.first?.name, "S/Y ANEMOS")
+        XCTAssertNil(store.errorMessage, store.errorMessage ?? "")
+    }
+
+    /// Restoring must leave the app pointing at something, not at a stale id
+    /// from the state it just replaced.
+    func testRestoringSelectsTheRecoveredTripAndDocument() async throws {
+        let secure = try TemporaryStore.make(in: &homes)
+        try await secure.save(populated(documents: 3))
+        try await secure.save(AppData())
+
+        let store = CrewStore(secureStore: secure)
+        await store.load()
+        store.selectedTripID = UUID()             // a stale id from nowhere
+        store.selectedDocumentID = UUID()
+
+        await store.refreshBackups()
+        await store.restoreBackup(try XCTUnwrap(store.backups.first).id)
+
+        XCTAssertEqual(store.selectedTripID, store.data.trips.first?.id)
+        XCTAssertNotNil(store.selectedDocumentID)
+        XCTAssertTrue(store.selectedTripDocuments.contains { $0.id == store.selectedDocumentID })
+    }
+
+    /// The confirmation promises the current state is kept. It has to be true.
+    func testWhatTheRestoreReplacedIsItselfRecoverable() async throws {
+        let secure = try TemporaryStore.make(in: &homes)
+        try await secure.save(populated(boat: "FIRST", documents: 2))
+        try await secure.save(populated(boat: "SECOND", documents: 5))
+
+        let store = CrewStore(secureStore: secure)
+        await store.load()
+        await store.refreshBackups()
+
+        // Step back to FIRST.
+        await store.restoreBackup(try XCTUnwrap(store.backups.first).id)
+        XCTAssertEqual(store.data.boats.first?.name, "FIRST")
+
+        // SECOND must now be reachable again.
+        await store.refreshBackups()
+        let names = try await withThrowingTaskGroup(of: String?.self) { _ -> [String] in
+            var found: [String] = []
+            for backup in store.backups {
+                found.append(try await secure.peek(backup.id).boats.first?.name ?? "")
+            }
+            return found
+        }
+        XCTAssertTrue(names.contains("SECOND"), "the state the restore replaced was lost: \(names)")
+    }
+
+    func testRestoringAMissingVersionReportsRatherThanCrashes() async throws {
+        let secure = try TemporaryStore.make(in: &homes)
+        try await secure.save(populated(documents: 1))
+
+        let store = CrewStore(secureStore: secure)
+        await store.load()
+        await store.restoreBackup("2020-01-01T000000000Z")
+
+        XCTAssertNotNil(store.errorMessage, "a missing version should explain itself")
+        XCTAssertEqual(store.data.documents.count, 1, "a failed restore must not disturb what is current")
+    }
+}
