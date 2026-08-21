@@ -15,6 +15,31 @@ struct TripScreen: View {
     @State private var loadedTripID: Trip.ID?
     @State private var pendingRestore: SecureStore.Backup?
 
+    /// What the last "Save a Version Now" did. A snapshot is skipped when
+    /// nothing has changed, and without this the button looks broken to
+    /// someone who pressed it precisely because they were worried.
+    @State private var snapshotResult: SnapshotResult?
+    @State private var snapshotMessageID = 0
+
+    enum SnapshotResult {
+        case saved
+        case alreadyCurrent
+
+        var message: String {
+            switch self {
+            case .saved: "Version saved"
+            case .alreadyCurrent: "Already saved — nothing has changed"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .saved: "checkmark.circle.fill"
+            case .alreadyCurrent: "clock.arrow.circlepath"
+            }
+        }
+    }
+
     var body: some View {
         DocumentGrid {
             VStack(spacing: 0) {
@@ -81,6 +106,22 @@ struct TripScreen: View {
     /// Normalising on every keystroke would fight the field — uppercasing a
     /// flag as it is typed moves the caret. The value is stored as typed and
     /// squared up when the field gives up focus.
+    private func saveAVersion() {
+        Task {
+            let written = await store.takeSnapshot()
+            snapshotMessageID += 1
+            let shownFor = snapshotMessageID
+            withAnimation(.easeOut(duration: 0.16)) {
+                snapshotResult = written ? .saved : .alreadyCurrent
+            }
+            // Clears itself, and only if no later press has replaced it.
+            try? await Task.sleep(for: .seconds(4))
+            if snapshotMessageID == shownFor {
+                withAnimation(.easeOut(duration: 0.2)) { snapshotResult = nil }
+            }
+        }
+    }
+
     /// Saves as you type. `CrewStore.updateBoat` refuses a blank name, so an
     /// emptied field cannot overwrite a real one on its way past.
     private func save() {
@@ -120,11 +161,19 @@ struct TripScreen: View {
             // Deliberately on the section's header line rather than a row of
             // its own: it is the one action here that belongs to no particular
             // version, and it was otherwise reachable only from the CLI.
-            Button("Save a Version Now") {
-                Task { await store.takeSnapshot(); await store.refreshBackups() }
+            HStack(spacing: 8) {
+                if let snapshotResult {
+                    Label(snapshotResult.message, systemImage: snapshotResult.symbol)
+                        .font(Theme.Font.meta)
+                        .foregroundStyle(Theme.inkSecondary)
+                        .labelStyle(.titleAndIcon)
+                        .transition(.opacity)
+                }
+
+                Button("Save a Version Now") { saveAVersion() }
+                    .buttonStyle(.philonQuiet)
+                    .font(Theme.Font.meta)
             }
-            .buttonStyle(.philonQuiet)
-            .font(Theme.Font.meta)
             .offset(y: -3)
         }
         .onAppear { Task { await store.refreshBackups() } }

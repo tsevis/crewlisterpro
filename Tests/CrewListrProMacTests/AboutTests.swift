@@ -81,8 +81,22 @@ final class AboutTests: XCTestCase {
         XCTAssertTrue(legal.contains("127.0.0.1"), "inference must be described as local")
     }
 
-    func testTheCreditNamesTheMaker() {
-        XCTAssertTrue(About.credit.contains(Brand.makerName))
+    /// The credit names the studio; the corner mark's tooltip names the person.
+    /// Both are true and they are not interchangeable, so each is pinned where
+    /// it belongs.
+    func testTheCreditNamesTheStudio() {
+        XCTAssertTrue(About.credit.contains(Brand.studioName),
+                      "the info screen credit no longer names the studio")
+    }
+
+    func testTheCreditNamesWhoItWasBuiltFor() {
+        XCTAssertTrue(About.credit.contains("Union Yachting"),
+                      "the credit no longer names who the app was built for")
+    }
+
+    func testTheLegalTextDeclaresTheLicence() {
+        XCTAssertTrue(About.legal.contains("MIT licensed"),
+                      "the info screen must state the app's own licence, not only its dependencies'")
     }
 
     func testTheLinksAreHTTPSAndReachTheMaker() {

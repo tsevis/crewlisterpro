@@ -321,11 +321,16 @@ final class CrewStore {
         backups = await secureStore.backups()
     }
 
-    /// A deliberate checkpoint, before something the operator expects to be risky.
-    func takeSnapshot() async {
-        guard let secureStore else { return }
-        _ = await secureStore.snapshot()
+    /// A deliberate checkpoint, before something the operator expects to be
+    /// risky. Returns whether a new version was written: it is skipped when
+    /// nothing has changed since the last one, and a button that silently does
+    /// nothing reads as broken to the person who just pressed it.
+    @discardableResult
+    func takeSnapshot() async -> Bool {
+        guard let secureStore else { return false }
+        let written = await secureStore.snapshot()
         await refreshBackups()
+        return written
     }
 
     /// Makes a snapshot current and reloads. The state it replaces is itself

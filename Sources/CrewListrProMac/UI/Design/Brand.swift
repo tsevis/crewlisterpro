@@ -15,7 +15,10 @@ enum Brand {
     /// CrewListr Pro's own icon, masked to the macOS shape.
     static let appMark: NSImage? = load("AppMark")
 
+    /// The person, for the mark's tooltip and accessibility label.
     static let makerName = "Charis Tsevis"
+    /// The studio, for the credit line an operator reads on the info screen.
+    static let studioName = "Tsevis Studio"
     static let makerSite = URL(string: "https://tsevis.com")!
 
     private static func load(_ name: String) -> NSImage? {

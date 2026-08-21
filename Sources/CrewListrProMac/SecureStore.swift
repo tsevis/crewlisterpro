@@ -119,11 +119,17 @@ actor SecureStore {
     /// deliberate checkpoint before something risky, and for protecting a state
     /// that predates backups existing at all.
     @discardableResult
+    /// Takes a snapshot, reporting whether one was actually written — it is
+    /// skipped when the current state is already the newest version.
+    ///
+    /// Compares the newest identifier rather than the file count: once the
+    /// history is at its cap, writing a snapshot also prunes one, so the count
+    /// is unchanged and a count-based check would report "nothing saved" at
+    /// exactly the moment the history is busiest.
     func snapshot() -> Bool {
-        let before = (try? FileManager.default.contentsOfDirectory(atPath: backupsURL.path(percentEncoded: false)))?.count ?? 0
+        let before = newestBackupURL()?.lastPathComponent
         snapshotCurrentState()
-        let after = (try? FileManager.default.contentsOfDirectory(atPath: backupsURL.path(percentEncoded: false)))?.count ?? 0
-        return after > before
+        return newestBackupURL()?.lastPathComponent != before
     }
 
     /// Newest first, each summarised by what it actually contains.

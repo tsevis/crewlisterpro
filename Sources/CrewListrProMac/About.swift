@@ -33,7 +33,7 @@ enum About {
     an operator has looked at each one beside the image it came from.
     """
 
-    static let credit = "Created by Charis Tsevis, with the help of Claude Code."
+    static let credit = "Developed by Tsevis Studio for Union Yachting and the Greek charter community."
 
     static let links: [(label: String, address: URL)] = [
         ("tsevis.com", URL(string: "https://tsevis.com")!),
@@ -56,6 +56,9 @@ enum About {
     SHA-256 before it is kept, and inference talks to 127.0.0.1 and nowhere else. \
     A document whose machine-readable zone parsed cleanly never reaches the model \
     at all, and anything the model proposes arrives unconfirmed like every other read.
+
+    CrewListr Pro is MIT licensed. Developed by Tsevis Studio for Union Yachting \
+    and the whole charter and sailing community of Greece.
 
     Your documents are yours. CrewListr Pro never transmits a document, a fragment, \
     an extracted field or a filename anywhere. Deleting a document or a trip erases \
