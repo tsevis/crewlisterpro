@@ -39,6 +39,20 @@ final class HeadlessExportTests: XCTestCase {
         XCTAssertNil(parse("--trip", "S/Y ANEMOS"))
     }
 
+    func testBackupsNeedsNoDirectory() {
+        let request = parse("--backups")
+        XCTAssertEqual(request?.listBackups, true)
+        XCTAssertNil(request?.directory)
+    }
+
+    func testRestoreTakesASnapshotIdentifier() {
+        XCTAssertEqual(parse("--restore", "2026-08-21T121122000Z")?.restoreIdentifier, "2026-08-21T121122000Z")
+    }
+
+    func testRestoreWithoutAnIdentifierIsRejected() {
+        XCTAssertNil(parse("--restore"))
+    }
+
     func testListNeedsNoDirectory() {
         let request = parse("--list")
         XCTAssertEqual(request?.listOnly, true)

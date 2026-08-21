@@ -4,6 +4,9 @@ import Foundation
 ///
 ///     CrewListrProMac --export <directory> [--trip <yacht name>]
 ///     CrewListrProMac --list
+///     CrewListrProMac --snapshot
+///     CrewListrProMac --backups
+///     CrewListrProMac --restore <snapshot-id>
 ///
 /// It runs the same store, the same export gate and the same `ExportService` the
 /// Crew List sheet uses, so a file produced this way is the file the sheet would
@@ -15,6 +18,9 @@ enum HeadlessExport {
         var directory: URL?
         var tripName: String?
         var listOnly = false
+        var listBackups = false
+        var takeSnapshot = false
+        var restoreIdentifier: String?
     }
 
     enum Failure: LocalizedError {
@@ -56,13 +62,25 @@ enum HeadlessExport {
             case "--list":
                 sawVerb = true
                 request.listOnly = true
+            case "--backups":
+                sawVerb = true
+                request.listBackups = true
+            case "--snapshot":
+                sawVerb = true
+                request.takeSnapshot = true
+            case "--restore":
+                sawVerb = true
+                guard index + 1 < arguments.count else { return nil }
+                index += 1
+                request.restoreIdentifier = arguments[index]
             default:
                 break
             }
             index += 1
         }
         guard sawVerb else { return nil }
-        guard request.listOnly || request.directory != nil else { return nil }
+        guard request.listOnly || request.listBackups || request.takeSnapshot
+                || request.restoreIdentifier != nil || request.directory != nil else { return nil }
         return request
     }
 
@@ -91,6 +109,37 @@ enum HeadlessExport {
     private static func execute(_ request: Request) async -> Int32 {
         do {
             let store = try SecureStore()
+
+            if request.takeSnapshot {
+                let taken = await store.snapshot()
+                log(taken
+                    ? "Snapshot taken."
+                    : "Nothing to snapshot: this state is already the newest one kept.")
+                return 0
+            }
+
+            if request.listBackups {
+                let backups = await store.backups()
+                guard !backups.isEmpty else {
+                    log("No snapshots yet. One is taken each time the store changes.")
+                    return 0
+                }
+                let stamp = DateFormatter()
+                stamp.dateStyle = .medium
+                stamp.timeStyle = .medium
+                for backup in backups {
+                    log("\(backup.id)  \(stamp.string(from: backup.created))  \(backup.trips) trip\(backup.trips == 1 ? "" : "s"), \(backup.documents) document\(backup.documents == 1 ? "" : "s")")
+                }
+                return 0
+            }
+
+            if let identifier = request.restoreIdentifier {
+                let recovered = try await store.restore(identifier)
+                log("Restored \(recovered.trips.count) trip(s) and \(recovered.documents.count) document(s) from \(identifier).")
+                log("The state this replaced was snapshotted first, so this is undoable.")
+                return 0
+            }
+
             let data = try await store.load()
             if request.listOnly {
                 printSummary(of: data)

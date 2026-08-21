@@ -19,6 +19,7 @@ enum StoreError: LocalizedError {
 /// original document files and revisions with AES-GCM.
 actor SecureStore {
     private let documentsURL: URL
+    private let backupsURL: URL
     private let keyData: Data
     private var database: OpaquePointer?
 
@@ -26,7 +27,9 @@ actor SecureStore {
         let support = try fileManager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         let root = support.appending(path: "CrewListrPro", directoryHint: .isDirectory)
         documentsURL = root.appending(path: "documents", directoryHint: .isDirectory)
+        backupsURL = root.appending(path: "backups", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: documentsURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: backupsURL, withIntermediateDirectories: true)
         keyData = try Self.loadOrCreateKey()
         database = try Self.openDatabase(at: root.appending(path: "crewlistr.sqlite").path(percentEncoded: false), keyData: keyData)
     }
@@ -45,8 +48,134 @@ actor SecureStore {
         let key = SymmetricKey(data: keyData)
         let plain = try JSONEncoder().encode(data)
         guard let encrypted = try AES.GCM.seal(plain, using: key).combined else { throw StoreError.invalidPayload }
+        // Snapshot BEFORE overwriting, so the copy on disk is the state that is
+        // about to be replaced. A save that turns out to be wrong — a bad
+        // import, a mistaken delete, a stray process writing an empty document
+        // set — is then one restore away instead of gone.
+        snapshotCurrentState()
         try writeBlob(encrypted)
     }
+
+    // MARK: - Backups
+    //
+    // The store is a single sealed blob in one row. Before today it had no
+    // history at all: one bad write and the operator's trips were unrecoverable
+    // except by re-importing every source document, which only worked because
+    // those documents happened to still exist.
+
+    /// How many snapshots are kept. They are a few tens of kilobytes each, so
+    /// depth costs nothing and buys a long way back.
+    static let backupDepth = 30
+
+    struct Backup: Identifiable, Sendable {
+        let id: String
+        let created: Date
+        let byteCount: Int
+        /// Decoded so the operator can choose by content, not by timestamp.
+        let trips: Int
+        let documents: Int
+    }
+
+    /// Best-effort: a failed snapshot must never block a save.
+    private func snapshotCurrentState() {
+        guard let existing = (try? blob(query: "SELECT payload FROM secure_state WHERE id=1")) ?? nil else { return }
+
+        // Skip a state already captured. `persist()` runs on every field edit,
+        // so without this the history fills with identical copies and the
+        // useful older states fall off the end of the prune.
+        if let newest = newestBackupURL(), let previous = try? Data(contentsOf: newest), previous == existing {
+            return
+        }
+
+        // Millisecond resolution: at one-second granularity two saves in the
+        // same second wrote the same filename, and the second silently replaced
+        // the first — losing exactly the state a restore would want.
+        var url = backupsURL.appending(path: "\(Self.stampFormatter.string(from: Date())).bin")
+        var attempt = 1
+        while FileManager.default.fileExists(atPath: url.path(percentEncoded: false)), attempt < 100 {
+            url = backupsURL.appending(path: "\(Self.stampFormatter.string(from: Date()))-\(attempt).bin")
+            attempt += 1
+        }
+        try? existing.write(to: url, options: .atomic)
+        pruneBackups()
+    }
+
+    private func newestBackupURL() -> URL? {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: backupsURL.path(percentEncoded: false)) else { return nil }
+        guard let newest = names.filter({ $0.hasSuffix(".bin") }).max() else { return nil }
+        return backupsURL.appending(path: newest)
+    }
+
+    private func pruneBackups() {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: backupsURL.path(percentEncoded: false)) else { return }
+        let ordered = names.filter { $0.hasSuffix(".bin") }.sorted()
+        guard ordered.count > Self.backupDepth else { return }
+        for name in ordered.prefix(ordered.count - Self.backupDepth) {
+            try? FileManager.default.removeItem(at: backupsURL.appending(path: name))
+        }
+    }
+
+    /// Snapshots the current state on demand, without changing it. For taking a
+    /// deliberate checkpoint before something risky, and for protecting a state
+    /// that predates backups existing at all.
+    @discardableResult
+    func snapshot() -> Bool {
+        let before = (try? FileManager.default.contentsOfDirectory(atPath: backupsURL.path(percentEncoded: false)))?.count ?? 0
+        snapshotCurrentState()
+        let after = (try? FileManager.default.contentsOfDirectory(atPath: backupsURL.path(percentEncoded: false)))?.count ?? 0
+        return after > before
+    }
+
+    /// Newest first, each summarised by what it actually contains.
+    func backups() -> [Backup] {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: backupsURL.path(percentEncoded: false)) else { return [] }
+        return names.filter { $0.hasSuffix(".bin") }.sorted(by: >).compactMap { name in
+            let url = backupsURL.appending(path: name)
+            guard let sealed = try? Data(contentsOf: url) else { return nil }
+            let identifier = String(name.dropLast(4))
+            let stamp = identifier.split(separator: "-").count > 3
+                ? String(identifier.prefix(while: { $0 != "Z" })) + "Z"
+                : identifier
+            guard let created = Self.stampFormatter.date(from: stamp) else { return nil }
+            let decoded = try? decodeSnapshot(sealed)
+            return Backup(
+                id: identifier,
+                created: created,
+                byteCount: sealed.count,
+                trips: decoded?.trips.count ?? 0,
+                documents: decoded?.documents.count ?? 0
+            )
+        }
+    }
+
+    /// Reads a snapshot without installing it, so a caller can look before it leaps.
+    func peek(_ identifier: String) throws -> AppData {
+        try decodeSnapshot(try Data(contentsOf: backupsURL.appending(path: "\(identifier).bin")))
+    }
+
+    /// Makes a snapshot current. The state being replaced is itself snapshotted
+    /// first, so restoring is undoable too.
+    @discardableResult
+    func restore(_ identifier: String) throws -> AppData {
+        let recovered = try peek(identifier)
+        try save(recovered)
+        return recovered
+    }
+
+    private func decodeSnapshot(_ sealed: Data) throws -> AppData {
+        let plain = try AES.GCM.open(try AES.GCM.SealedBox(combined: sealed), using: SymmetricKey(data: keyData))
+        guard let decoded = try? JSONDecoder().decode(AppData.self, from: plain) else { throw StoreError.invalidPayload }
+        return decoded
+    }
+
+    /// Sortable, filename-safe, and parseable back to a date.
+    private static let stampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HHmmssSSS'Z'"
+        return formatter
+    }()
 
     func importOriginal(from source: URL, documentID: UUID) throws -> String {
         let encrypted = try encrypt(Data(contentsOf: source))
