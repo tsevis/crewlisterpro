@@ -52,8 +52,6 @@ struct TripScreen: View {
                         )
 
                         snapshots
-
-                        EarlierVersions()
                     }
                     // Capped for line length, then pushed left: the cap alone
                     // centres the block and leaves it adrift from the header.
@@ -117,6 +115,17 @@ struct TripScreen: View {
                     snapshotRow(backup)
                 }
             }
+        }
+        .overlay(alignment: .topTrailing) {
+            // Deliberately on the section's header line rather than a row of
+            // its own: it is the one action here that belongs to no particular
+            // version, and it was otherwise reachable only from the CLI.
+            Button("Save a Version Now") {
+                Task { await store.takeSnapshot(); await store.refreshBackups() }
+            }
+            .buttonStyle(.philonQuiet)
+            .font(Theme.Font.meta)
+            .offset(y: -3)
         }
         .onAppear { Task { await store.refreshBackups() } }
         .confirmationDialog(

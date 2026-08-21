@@ -164,3 +164,39 @@ final class BackupTests: XCTestCase {
         _ = root
     }
 }
+
+// MARK: - What the restore UI shows
+
+@MainActor
+final class BackupPresentationTests: XCTestCase {
+
+    private func backup(trips: Int, documents: Int) -> SecureStore.Backup {
+        SecureStore.Backup(id: "2026-08-21T110225635Z", created: .now, byteCount: 2048,
+                           trips: trips, documents: documents)
+    }
+
+    /// The row has to say what restoring would bring back. A timestamp alone
+    /// makes the operator guess.
+    func testARowDescribesWhatTheVersionContains() {
+        XCTAssertEqual(CrewStore.describe(backup(trips: 1, documents: 6)), "1 trip, 6 documents")
+    }
+
+    func testTheDescriptionIsGrammaticalForSingletons() {
+        XCTAssertEqual(CrewStore.describe(backup(trips: 1, documents: 1)), "1 trip, 1 document")
+        XCTAssertEqual(CrewStore.describe(backup(trips: 2, documents: 0)), "2 trips, 0 documents")
+    }
+
+    /// A store with nothing behind it lists nothing rather than failing.
+    func testAStoreWithNoDatabaseHasNoVersions() async {
+        let store = CrewStore(secureStore: nil)
+        await store.refreshBackups()
+        XCTAssertTrue(store.backups.isEmpty)
+    }
+
+    func testRestoringThroughAStoreWithNoDatabaseIsANoOp() async {
+        let store = CrewStore(secureStore: nil)
+        await store.restoreBackup("2026-08-21T110225635Z")
+        XCTAssertNil(store.errorMessage, "a store with nowhere to read from should not raise an error at the operator")
+        XCTAssertTrue(store.data.trips.isEmpty)
+    }
+}

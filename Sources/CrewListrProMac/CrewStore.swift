@@ -492,37 +492,6 @@ final class CrewStore {
         Task { await secureStore.deleteOriginals(named: names.filter { !$0.isEmpty }) }
     }
 
-    // MARK: - Earlier versions
-
-    /// The snapshots the store has kept of itself, newest first.
-    func backups() async -> [SecureStore.Backup] {
-        guard let secureStore else { return [] }
-        return await secureStore.backups()
-    }
-
-    /// Makes a snapshot current. `SecureStore.restore` snapshots the state it
-    /// replaces before writing, so this is itself undoable.
-    func restore(_ identifier: String) async {
-        guard let secureStore else { return }
-        do {
-            let recovered = try await secureStore.restore(identifier)
-            data = recovered
-            hasLoaded = true
-            // The previous selection may name a trip that no longer exists.
-            selectedTripID = data.trips.first?.id
-            selectedDocumentID = selectedTripDocuments.first?.id
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    /// Takes a snapshot now, before something risky.
-    @discardableResult
-    func snapshot() async -> Bool {
-        guard let secureStore else { return false }
-        return await secureStore.snapshot()
-    }
-
     /// Waits for any in-flight save to reach disk. Tests only: the UI never
     /// needs it, because `persistChain` already serialises writes.
     func flushForTesting() async { _ = await persistChain.value }
