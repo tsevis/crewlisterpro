@@ -10,6 +10,10 @@ enum RescueError: LocalizedError {
     case runtimeMissing
     case runtimeDidNotStart
     case unreadableReply
+    /// The server answered, but not with success. Carries the status, because
+    /// "503 while the model is still loading" and "400 bad request" are not the
+    /// same problem and must not read as the same message.
+    case serverRefused(status: Int)
 
     var errorDescription: String? {
         switch self {
@@ -17,6 +21,8 @@ enum RescueError: LocalizedError {
             "The local AI model is not installed on this Mac."
         case .runtimeMissing:
             "The local AI runtime is missing from this build of \(AppVersion.name)."
+        case .serverRefused(let status):
+            "The local AI is not answering yet (HTTP \(status))."
         case .runtimeDidNotStart:
             "The local AI model did not finish loading."
         case .unreadableReply:
@@ -30,6 +36,8 @@ enum RescueError: LocalizedError {
             "Download \(ModelManifest.qwen3VL8BQ4.displayName) (\(ModelManifest.qwen3VL8BQ4.approximateSizeDescription)). It is a one-time download and stays on this Mac. Everything else works without it."
         case .runtimeMissing:
             "This build was packaged without llama-server. Rebuild with scripts/release.sh on a machine that has it."
+        case .serverRefused(let status):
+            "The local AI is not answering yet (HTTP \(status))."
         case .runtimeDidNotStart:
             "It can take a minute on first use. Try again, and check there is free memory."
         case .unreadableReply:
@@ -56,16 +64,30 @@ actor LlamaVisionRescuer {
             "model": "local", "temperature": 0,
             "messages": [["role": "user", "content": [["type": "text", "text": prompt], ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(imageData.base64EncodedString())"]]]]],
         ])
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200,
-              let outer = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+        // A server that has answered `health` can still refuse work while it
+        // finishes warming, so a refusal is retried rather than reported. The
+        // old code collapsed five different failures into one message and named
+        // only the last of them, so an HTTP 503 from a loading model reached the
+        // operator as "returned something that was not a set of document
+        // fields" — false, and it sends them looking in the wrong place.
+        var data = Data()
+        for attempt in 0..<6 {
+            let (body, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 200 { data = body; break }
+            guard Self.isTransient(status), attempt < 5 else { throw RescueError.serverRefused(status: status) }
+            onPhase?(.loadingModel(elapsed: Double(attempt + 1)))
+            try await Task.sleep(for: .seconds(2))
+        }
+        guard !data.isEmpty else { throw RescueError.serverRefused(status: 0) }
+
+        guard let outer = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = outer["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String,
-              let jsonData = content.data(using: .utf8),
-              let fields = try JSONSerialization.jsonObject(with: jsonData) as? [String: String] else {
+              let content = message["content"] as? String else {
             throw RescueError.unreadableReply
         }
+        let fields = try Self.decodeFields(from: content)
         return fields
             .filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .reduce(into: [String: String]()) { result, entry in
@@ -109,6 +131,40 @@ actor LlamaVisionRescuer {
         // means. `MRZ.date` already decides that for birth and expiry; a second
         // rule here would be one that could disagree with it.
         return MRZ.date(String(format: "%02d%02d%02d", year, month, day), kind: kind) ?? value
+    }
+
+    /// 503 and 429 mean "not yet"; a 400 means the request was wrong and
+    /// retrying it will not help.
+    static func isTransient(_ status: Int) -> Bool {
+        status == 503 || status == 429 || status == 425 || status == 0
+    }
+
+    /// Decodes the model's JSON without insisting every value is a string.
+    ///
+    /// `as? [String: String]` discards the whole reply over a single `null` for
+    /// an uncertain field — which is exactly what the prompt invites — or over
+    /// a number where a string was expected. Values are coerced instead, and
+    /// anything genuinely not scalar is dropped rather than taking the rest of
+    /// the document's fields down with it.
+    static func decodeFields(from content: String) throws -> [String: String] {
+        // Local models often wrap JSON in a ```json fence. Taking the span
+        // between the first { and the last } handles that, and prose either
+        // side of the object, without parsing the fence syntax itself.
+        guard let start = content.firstIndex(of: "{"), let end = content.lastIndex(of: "}"), start < end else {
+            throw RescueError.unreadableReply
+        }
+        let json = String(content[start...end])
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw RescueError.unreadableReply
+        }
+        return object.reduce(into: [String: String]()) { result, entry in
+            switch entry.value {
+            case let text as String: result[entry.key] = text
+            case let number as NSNumber: result[entry.key] = number.stringValue
+            default: break   // null, array, nested object — no usable value
+            }
+        }
     }
 
     /// Where the rescue has got to, so the operator is told the difference
