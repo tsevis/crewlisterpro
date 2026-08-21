@@ -114,6 +114,7 @@ final class CrewStore {
         do {
             data = try await secureStore.load()
             hasLoaded = true
+            reportDecodingLosses()
             // Open on the work in hand rather than on two empty columns: the
             // first trip, and within it the first document still needing review.
             // An archived trip is not work in hand, so it is never what the app
@@ -126,6 +127,22 @@ final class CrewStore {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Tells the operator when a read salvaged what it could.
+    ///
+    /// `AppData` now decodes record by record, so one malformed row costs one
+    /// row instead of the whole database. That is the right trade only if the
+    /// dropped row is announced: a document that fails to decode is a passport
+    /// scan that has quietly left a trip, and an operator who is not told will
+    /// discover it when a port authority counts heads.
+    func reportDecodingLosses() {
+        guard !data.decodingLosses.isEmpty else { return }
+        errorMessage = ([
+            "Some stored records could not be read and were left out.",
+        ] + data.decodingLosses + [
+            "The rest of your data opened normally. An earlier version may be available under Earlier versions.",
+        ]).joined(separator: "\n")
     }
 
     // MARK: - Trips and boats
@@ -436,6 +453,9 @@ final class CrewStore {
         defer { activity = nil }
         do {
             data = try await secureStore.restore(identifier)
+            // A snapshot is older than the live store by definition, so it is
+            // likelier than anything to hold a record this build salvages.
+            reportDecodingLosses()
             selectedTripID = activeTrips.first?.id
             selectedDocumentID = selectedTripDocuments.first?.id
             await refreshBackups()

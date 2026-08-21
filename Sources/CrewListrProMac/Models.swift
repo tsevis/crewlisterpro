@@ -31,6 +31,23 @@ struct Boat: Codable, Identifiable, Hashable {
     static let placeholderName = "NEW YACHT"
 }
 
+extension Boat {
+    /// See `Trip.init(from:)` for why every persisted type here decodes by hand.
+    ///
+    /// The name falls back to the placeholder rather than to an empty string so
+    /// `isComplete` reads false: a yacht whose name could not be read must stop
+    /// the export and ask for one, not print a blank header box.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Identity is never invented — see the note on `CrewDocument`.
+        id = try container.decode(UUID.self, forKey: .id)
+        name = (try? container.decode(String.self, forKey: .name)) ?? Self.placeholderName
+        flag = (try? container.decode(String.self, forKey: .flag)) ?? ""
+        registrationPort = (try? container.decode(String.self, forKey: .registrationPort)) ?? ""
+        registrationNumber = (try? container.decode(String.self, forKey: .registrationNumber)) ?? ""
+    }
+}
+
 /// Whether a charter is still being worked on, or has been put away.
 ///
 /// Archiving is not deleting. `CrewStore.deleteTrip` shreds the encrypted
@@ -86,6 +103,19 @@ struct CrewPerson: Codable, Identifiable, Hashable {
     var nationality: String = ""
     var birthDate: Date?
     var verification: VerificationState = .pending
+}
+
+extension CrewPerson {
+    /// An unreadable verification state reads as `.pending`: unreviewed is the
+    /// only safe guess about a person nobody can prove was reviewed.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        fullName = (try? container.decode(String.self, forKey: .fullName)) ?? ""
+        nationality = (try? container.decode(String.self, forKey: .nationality)) ?? ""
+        birthDate = try? container.decodeIfPresent(Date.self, forKey: .birthDate)
+        verification = (try? container.decode(VerificationState.self, forKey: .verification)) ?? .pending
+    }
 }
 
 struct CrewDocument: Codable, Identifiable, Hashable {
@@ -193,6 +223,40 @@ struct CrewDocument: Codable, Identifiable, Hashable {
     }
 }
 
+extension CrewDocument {
+    /// The rule this file follows, stated once here because this is the type it
+    /// was learned on.
+    ///
+    /// **Descriptive fields are salvaged, and always in the direction that makes
+    /// the operator look.** An unreadable `verifiedFields` decodes as empty, so
+    /// the document is held back for review rather than waved onto a crew list;
+    /// an unrecognised `risk` decodes as `.review` and never as `.low`.
+    ///
+    /// **Identity is never fabricated.** `id`, `tripID` and `personID` are what
+    /// join this document to its trip and its person. Substituting a fresh UUID
+    /// for a missing one would produce a passport scan attached to no trip,
+    /// invisible in the interface and impossible to delete — strictly worse
+    /// than a record that refuses to load and says so.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        tripID = try container.decode(UUID.self, forKey: .tripID)
+        personID = try container.decode(UUID.self, forKey: .personID)
+        originalName = (try? container.decode(String.self, forKey: .originalName)) ?? ""
+        // Empty is already an anticipated state: `CrewStore.discardFiles`
+        // filters empty names before asking the store to delete anything.
+        encryptedFileName = (try? container.decode(String.self, forKey: .encryptedFileName)) ?? ""
+        documentNumber = (try? container.decode(String.self, forKey: .documentNumber)) ?? ""
+        documentType = (try? container.decode(String.self, forKey: .documentType)) ?? "unknown"
+        risk = (try? container.decode(RiskLevel.self, forKey: .risk)) ?? .review
+        riskReasons = (try? container.decode([String].self, forKey: .riskReasons)) ?? []
+        fields = (try? container.decode([String: String].self, forKey: .fields)) ?? [:]
+        verifiedFields = (try? container.decode(Set<String>.self, forKey: .verifiedFields)) ?? []
+        suggestedFields = try? container.decodeIfPresent(Set<String>.self, forKey: .suggestedFields)
+        imageRevisions = (try? container.decode([String].self, forKey: .imageRevisions)) ?? []
+    }
+}
+
 enum ReviewStatus: String, Sendable {
     case awaitingReview, inProgress, cleared, rejected
 
@@ -221,6 +285,21 @@ struct CrewAssignment: Codable, Identifiable, Hashable {
     var personID: UUID
     var role: CrewRole = .passenger
     var notes: String = ""
+}
+
+extension CrewAssignment {
+    /// An unreadable role reads as `.passenger`, which is the safe direction:
+    /// a trip with no skipper is blocked from export and says so, whereas
+    /// guessing `.skipper` would let a crew list out naming the wrong person as
+    /// master of the vessel.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        tripID = try container.decode(UUID.self, forKey: .tripID)
+        personID = try container.decode(UUID.self, forKey: .personID)
+        role = (try? container.decode(CrewRole.self, forKey: .role)) ?? .passenger
+        notes = (try? container.decode(String.self, forKey: .notes)) ?? ""
+    }
 }
 
 /// One printable line of the crew list, projected from a reviewed document.
@@ -259,7 +338,22 @@ struct AppData: Codable {
     var documents: [CrewDocument] = []
     var assignments: [CrewAssignment] = []
 
+    /// Records this read could not decode, one line each.
+    ///
+    /// Not persisted, and deliberately not silent. Salvaging a collection means
+    /// dropping something — a passport that will simply be missing from a trip —
+    /// and the operator has to be told rather than left to notice. `CrewStore`
+    /// surfaces this after `load()`; writing it back would save a complaint
+    /// about data the next save has already rewritten.
+    var decodingLosses: [String] = []
+
     static let currentSchemaVersion = 2
+
+    /// Only the persisted properties. Declared explicitly so `decodingLosses`
+    /// is never written to disk.
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, boats, trips, people, documents, assignments
+    }
 
     init(schemaVersion: Int = AppData.currentSchemaVersion, boats: [Boat] = [], trips: [Trip] = [], people: [CrewPerson] = [], documents: [CrewDocument] = [], assignments: [CrewAssignment] = []) {
         self.schemaVersion = schemaVersion
@@ -271,13 +365,56 @@ struct AppData: Codable {
     }
 
     /// A payload written before versioning decodes as version 1.
+    ///
+    /// Each collection is decoded element by element. Decoding `[CrewDocument]`
+    /// in one go is all-or-nothing: a single malformed element threw, and took
+    /// every trip, person and confirmation in the store down with it — the
+    /// operator was told their data was corrupt when one record out of hundreds
+    /// was. One unreadable record must cost one record.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        var losses: [String] = []
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        boats = try container.decodeIfPresent([Boat].self, forKey: .boats) ?? []
-        trips = try container.decodeIfPresent([Trip].self, forKey: .trips) ?? []
-        people = try container.decodeIfPresent([CrewPerson].self, forKey: .people) ?? []
-        documents = try container.decodeIfPresent([CrewDocument].self, forKey: .documents) ?? []
-        assignments = try container.decodeIfPresent([CrewAssignment].self, forKey: .assignments) ?? []
+        boats = Self.salvage(from: container, forKey: .boats, describing: "boat", into: &losses)
+        trips = Self.salvage(from: container, forKey: .trips, describing: "trip", into: &losses)
+        people = Self.salvage(from: container, forKey: .people, describing: "person", into: &losses)
+        documents = Self.salvage(from: container, forKey: .documents, describing: "document", into: &losses)
+        assignments = Self.salvage(from: container, forKey: .assignments, describing: "crew assignment", into: &losses)
+        decodingLosses = losses
+    }
+
+    /// Decodes what it can from one collection, and names what it could not.
+    private static func salvage<Element: Decodable>(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys,
+        describing noun: String,
+        into losses: inout [String]
+    ) -> [Element] {
+        // An absent key is not damage: a store written before this collection
+        // existed simply has none of them. Only a key that is present and
+        // unreadable counts as a loss, or every older payload would open
+        // accusing itself of corruption it does not have.
+        guard container.contains(key), (try? container.decodeNil(forKey: key)) != true else { return [] }
+        guard let wrapped = try? container.decode([Salvaged<Element>].self, forKey: key) else {
+            // The collection itself was unreadable — not one bad element but a
+            // key holding something that is not an array at all.
+            losses.append("The stored \(noun) list could not be read.")
+            return []
+        }
+        let recovered = wrapped.compactMap(\.value)
+        let lost = wrapped.count - recovered.count
+        if lost > 0 {
+            losses.append("\(lost) \(noun)\(lost == 1 ? "" : "s") could not be read and \(lost == 1 ? "was" : "were") left out.")
+        }
+        return recovered
+    }
+
+    /// Decodes an element, or absorbs its failure so its neighbours survive.
+    private struct Salvaged<Value: Decodable>: Decodable {
+        let value: Value?
+
+        init(from decoder: any Decoder) throws {
+            value = try? Value(from: decoder)
+        }
     }
 }
