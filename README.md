@@ -1,0 +1,202 @@
+# CrewListr Pro
+
+<img src="docs/icon-masked.png" alt="CrewListr Pro" width="128">
+
+**Offline crew-list preparation for charter yachts.** Version 1.0.0 · macOS 15+ · Apple Silicon
+
+CrewListr Pro turns photographed or scanned identity documents into the crew list a port
+authority expects. Extraction runs entirely on this Mac using Vision OCR and ICAO 9303
+machine-readable-zone parsing, with an optional local vision model for documents whose MRZ
+cannot be read. Documents and extracted data never leave the machine: application state
+lives in a SQLCipher database and original files are sealed with AES-GCM under a
+Keychain-held key. **Nothing can be exported until an operator has confirmed every field
+against the document image.**
+
+**Topics** · `crew-list` `yacht-charter` `maritime` `port-clearance` `passport` `mrz`
+`icao-9303` `ocr` `vision` `macos` `swiftui` `apple-silicon` `offline-first` `on-device-ai`
+`sqlcipher` `aes-gcm` `privacy`
+
+---
+
+## The review pane
+
+![CrewListr Pro review pane](docs/screenshots/01-review.png)
+
+Three columns follow the operator's actual sequence — **choose a trip, pick a document,
+check it against its own image.**
+
+- **Trips** carry the yacht, the voyage dates and how many documents are cleared.
+- **Documents** show the status the *operator* has reached, not what a check digit guessed.
+  A freshly imported passport reads "Awaiting review" even when its MRZ is perfect.
+- **Review** puts the decrypted document image beside its extracted fields. Every field is
+  editable, every field is validated, and every field carries its own confirm toggle.
+  Editing a value retracts its confirmation — a correction is re-checked like any other read.
+
+The strip above the Import button always names the next thing standing between this trip and
+a crew list ("Name the yacht.", "GIULIA ROSSI: Nationality, Date of birth, Sex still
+unconfirmed."), rather than only greying the export button out.
+
+## The exported crew list
+
+![Exported crew list](docs/screenshots/03-crew-list.png)
+
+Export writes two files, named for the yacht and the departure date so two charters leaving
+the same day cannot overwrite each other:
+
+- **PDF** — a boxed header (yacht, flag, port of registry, registration number), a SKIPPER
+  section and a PASSENGERS section, paginated so a large crew cannot fall off the page.
+- **CSV** — UTF-8 with a BOM, CRLF line endings, and leading `=`/`+`/`-`/`@` neutralised so a
+  name read off a scanned document cannot execute in a spreadsheet.
+
+A sample of both is in [`docs/sample/`](docs/sample/), generated from fictional ICAO specimen
+documents.
+
+---
+
+## Build and run
+
+```bash
+swift build -c release
+```
+
+```bash
+swift test
+```
+
+```bash
+./scripts/release.sh
+```
+
+`release.sh` produces a self-contained `.app` bundle and DMG including SQLCipher and the
+local llama.cpp runtime, builds `AppIcon.icns` from `Resources/AppIcon.png` — applying Apple's icon grid
+(an 824pt rounded body on a 1024pt canvas, with a shadow) and cutting all ten required
+sizes — ad-hoc signs every binary it rewrites, and stamps the bundle from
+`Sources/CrewListrProMac/Version.swift` so the Info.plist cannot drift from the binary.
+Apple Developer ID signing and notarization remain external steps.
+
+**Requires** Homebrew `sqlcipher` and `openssl@4`; `llama-server` on `PATH` (or
+`CREWLISTR_LLAMA_SERVER`) only if you package the optional local model.
+
+---
+
+## How extraction works
+
+1. **Vision OCR** reads the page in `en`, `uk`, `ru` and `el`.
+2. **MRZ line 2** is parsed and checked against its own arithmetic — the document-number,
+   birth-date and expiry check digits must all agree. Line 2 alone yields the number,
+   nationality, birth date, sex and expiry.
+3. **MRZ line 1** supplies the names, best-effort. It carries no check digit, so it is treated
+   as untrusted: a line containing digits is discarded rather than turned into a name, and the
+   name field stops at its first run of fillers.
+4. **Validation** flags what the operator must look at: an impossible date blocks, an expired
+   document warns, a name with a long repeated run warns.
+5. **Nothing clears itself.** Extraction always returns `review`. Only the operator moves a
+   document to `cleared`.
+
+The optional **Qwen3-VL 8B Q4** local model (≈5.8 GB, downloaded on explicit consent) is
+offered only for documents whose MRZ could not be read. Its suggestions arrive unconfirmed
+like everything else. The repository intentionally contains no model weights and no identity
+documents.
+
+---
+
+## Results on a real document set
+
+Six real Ukrainian passports (five phone photographs, one PDF scan — two of them
+photographed sideways, three with a damaged MRZ name line):
+
+| Outcome | Count |
+| --- | --- |
+| Number, nationality, birth date, sex and expiry recovered | **6 / 6** |
+| Name recovered from the MRZ | **3 / 6** |
+| Complete rows after operator review | **3 / 6**, the rest blocked on **one** field each |
+
+Every document gives up its line-2 identity whatever the camera did to line 1. The three
+documents whose name line was destroyed are held back naming exactly one missing field —
+"Full name" — for the operator to type from the image beside it.
+
+To reproduce against your own documents:
+
+```bash
+CREWLISTR_FIXTURES=/path/to/documents CREWLISTR_OUTPUT=./TestOutput swift test --filter CrewListGenerationTests
+```
+
+---
+
+## Testing
+
+126 tests, no unexpected failures. Eleven are opt-in and skip unless their environment
+variable is set — they touch real identity documents or the live encrypted store.
+
+| Suite | Covers |
+| --- | --- |
+| `MRZTests` | Check digits, two-digit year resolution, name parsing, every rejection path |
+| `ModelTests` | The export gate, field validation, persistence shapes and schema versioning |
+| `ExportServiceTests` | CSV structure and injection safety, PDF pagination and content |
+| `DocumentProcessorTests` | Rotate, crop and enhance |
+| `StoragePathTests` | The application-support path and SQLCipher open |
+| `SQLCipherTests` | That the database file contains no plaintext |
+| `SpecimenGeneratorTests` | That the synthetic fixtures survive the real OCR pipeline |
+| `AppResourcesTests` | The icon asset, its macOS shape, and the release wiring |
+| `CrewListGenerationTests` *(opt-in)* | The whole pipeline against real documents |
+| `SampleExportTests` *(opt-in)* | The documentation sample |
+| `DemoSeed` *(opt-in, destructive)* | Seeds or wipes the live store for screenshots |
+
+```bash
+swift test --enable-code-coverage
+```
+
+Opt-in switches:
+
+```bash
+CREWLISTR_FIXTURES=<dir>      # run the pipeline against real documents
+CREWLISTR_OUTPUT=<dir>        # where the generated crew list is written
+CREWLISTR_SAMPLE_OUT=<dir>    # write the documentation sample
+CREWLISTR_SEED_DEMO=1|wipe    # seed or clear the live store (destructive)
+```
+
+---
+
+## Where your data lives
+
+| What | Where | Protection |
+| --- | --- | --- |
+| Application state | `~/Library/Application Support/CrewListrPro/crewlistr.sqlite` | SQLCipher, plus AES-GCM on the payload |
+| Original documents and revisions | `~/Library/Application Support/CrewListrPro/documents/` | AES-GCM |
+| Encryption key | Keychain, `com.tsevis.crewlisterpro` | `WhenUnlockedThisDeviceOnly` |
+| Model weights | `~/Library/Application Support/CrewListrPro/models/` | — |
+
+Deleting a document or a trip erases the encrypted original and every revision from disk.
+
+Nothing is sent anywhere. The only network traffic the app can generate is the optional model
+download, and inference talks to `127.0.0.1` only.
+
+---
+
+## Project layout
+
+```
+Resources/AppIcon.png    Flat source artwork
+scripts/mask-icon.swift  Applies the macOS icon grid (824pt body, continuous corners)
+scripts/make-icon.sh     Masks, then cuts the ten sizes into AppIcon.icns
+Sources/CrewListrProMac/
+  Version.swift          Product identity: version, description, tags, icon, category
+  Models.swift           Domain types, the export gate, the crew-list projection
+  CrewFields.swift       The shared field vocabulary and its validation rules
+  MRZ.swift              ICAO 9303 TD3 parsing and check digits
+  OCRService.swift       Vision text recognition
+  DocumentProcessor.swift Rotate, crop, enhance
+  CrewStore.swift        Observable state; the single writer to the encrypted store
+  SecureStore.swift      SQLCipher + AES-GCM + Keychain
+  ModelManager.swift     Local model download with integrity checking
+  LlamaVisionRescuer.swift  Optional local VLM
+  ExportService.swift    CSV and the printed crew list
+  UI/
+    AppShell.swift       App entry, the three-column shell, storage-failure view
+    TripSidebar.swift    Trips, readiness, delete
+    DocumentColumn.swift Documents, review status, export readiness
+    ReviewDetail.swift   The field-by-field review pane
+    DocumentPreview.swift Decrypted image with zoom and rotate
+    TripInspector.swift  Yacht and voyage details
+    ExportSheet.swift    Crew-list preview, blockers and export
+```
