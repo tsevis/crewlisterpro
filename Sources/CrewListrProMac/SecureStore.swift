@@ -4,14 +4,43 @@ import Foundation
 import Security
 
 enum StoreError: LocalizedError {
-    case unavailableKey, invalidPayload, database(String)
+    /// What the Keychain was asked to do when it refused. The two stages are
+    /// opposite situations with opposite remedies: a failed read means a key
+    /// exists and cannot be reached, a failed create means there is no key at
+    /// all. A message that does not say which sends the reader the wrong way.
+    enum KeychainStage {
+        case read, create
+
+        var description: String {
+            switch self {
+            case .read: "reading the existing key"
+            case .create: "storing a new key"
+            }
+        }
+    }
+
+    case unavailableKey(stage: KeychainStage, status: OSStatus)
+    case invalidPayload
+    case database(String)
 
     var errorDescription: String? {
         switch self {
-        case .unavailableKey: "The local encryption key could not be accessed."
+        case .unavailableKey(let stage, let status):
+            // The bare sentence used to be the whole message, which made a
+            // locked Keychain, a denied ACL and a stale app with the same
+            // bundle identifier indistinguishable on screen. The status is the
+            // one thing that separates them, so it travels with the sentence.
+            "The local encryption key could not be accessed: \(stage.description) failed with OSStatus \(status) (\(Self.explain(status)))."
         case .invalidPayload: "Encrypted local data could not be decoded."
         case .database(let message): "Encrypted database error: \(message)"
         }
+    }
+
+    /// macOS already writes a plain-language explanation for every Security
+    /// status; not showing it would throw away the readable half of the answer.
+    /// Codes it does not know still reach the operator as a number.
+    private static func explain(_ status: OSStatus) -> String {
+        SecCopyErrorMessageString(status, nil) as String? ?? "no description available"
     }
 }
 
@@ -278,10 +307,14 @@ actor SecureStore {
         var result: CFTypeRef?
         let status = SecItemCopyMatching(lookup as CFDictionary, &result)
         if status == errSecSuccess, let data = result as? Data { return data }
-        guard status == errSecItemNotFound else { throw StoreError.unavailableKey }
+        // Anything other than "no key yet" is a refusal that has to be reported
+        // with its status: the same failed lookup can mean a locked Keychain, a
+        // denied ACL, or a different app answering for this bundle identifier.
+        guard status == errSecItemNotFound else { throw StoreError.unavailableKey(stage: .read, status: status) }
         let data = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
         let add: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account, kSecValueData as String: data, kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
-        guard SecItemAdd(add as CFDictionary, nil) == errSecSuccess else { throw StoreError.unavailableKey }
+        let added = SecItemAdd(add as CFDictionary, nil)
+        guard added == errSecSuccess else { throw StoreError.unavailableKey(stage: .create, status: added) }
         return data
     }
 }
