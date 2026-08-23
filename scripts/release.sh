@@ -5,6 +5,25 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/.build/arm64-apple-macosx/release/CrewListrProMac"
 OUTPUT="$ROOT/dist"
 APP="$OUTPUT/CrewListr Pro.app"
+INSTALLED="/Applications/CrewListr Pro.app"
+
+# Building into dist/ and installing into /Applications used to be unrelated
+# acts, so the two drifted: a superseded build sat in /Applications for weeks,
+# claiming the same bundle identifier as this one. LaunchServices answered
+# every launch with the stale copy — including `open` on the correct path —
+# and its own unrelated failure was read as this app being broken.
+INSTALL=0
+for argument in "$@"; do
+  case "$argument" in
+    --install) INSTALL=1 ;;
+    -h|--help)
+      echo "usage: release.sh [--install]"
+      echo "  --install   after building, replace $INSTALLED with this build"
+      exit 0
+      ;;
+    *) echo "Unknown option: $argument" >&2; exit 2 ;;
+  esac
+done
 
 swift build -c release --package-path "$ROOT"
 rm -rf "$OUTPUT"
@@ -115,3 +134,44 @@ cp "$APP/Contents/Resources/$ICON_FILE.icns" "$APP/../.VolumeIcon.icns" 2>/dev/n
 
 hdiutil create -volname "$APP_NAME $SHORT_VERSION" -srcfolder "$APP" -ov -format UDZO "$OUTPUT/CrewListr-Pro-$SHORT_VERSION.dmg"
 echo "Built $APP_NAME $SHORT_VERSION ($BUILD_VERSION) -> $OUTPUT"
+
+installed_version() {
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INSTALLED/Contents/Info.plist" 2>/dev/null || echo "unreadable"
+}
+
+if (( INSTALL )); then
+  # A running copy holds the executable and the encrypted store open. Replacing
+  # it underneath itself leaves a process running code that no longer exists on
+  # disk, which is exactly the state that is impossible to reason about later.
+  if pgrep -x "$APP_NAME" >/dev/null 2>&1 || pgrep -f "$INSTALLED" >/dev/null 2>&1; then
+    echo "Quitting the running copy before replacing it"
+    osascript -e "quit app \"$APP_NAME\"" 2>/dev/null || pkill -f "$INSTALLED" || true
+  fi
+
+  # Moved, never deleted. The copy being replaced may be the only build of a
+  # version that is not in git, and this script must not be the thing that
+  # loses it.
+  if [[ -e "$INSTALLED" ]]; then
+    ARCHIVE="$HOME/.Trash/CrewListr Pro $(installed_version) $(date +%Y-%m-%d-%H%M%S).app"
+    mv "$INSTALLED" "$ARCHIVE"
+    echo "Moved the previous $INSTALLED to the Trash as $(basename "$ARCHIVE")"
+  fi
+
+  # ditto, not cp: it preserves the code signature, and an app whose seal is
+  # broken in transit is SIGKILLed at launch with nothing in the logs.
+  ditto "$APP" "$INSTALLED"
+  codesign --verify --strict "$INSTALLED"
+
+  # LaunchServices caches which bundle owns an identifier. Without this it can
+  # keep answering with the copy that was just moved to the Trash.
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$INSTALLED"
+  echo "Installed $APP_NAME $SHORT_VERSION -> $INSTALLED"
+elif [[ -e "$INSTALLED" ]] && [[ "$(installed_version)" != "$SHORT_VERSION" ]]; then
+  # Not an error: building without installing is legitimate. But the two copies
+  # answer to one bundle identifier, so the reader should know which one a
+  # double-click will actually open.
+  echo ""
+  echo "WARNING: $INSTALLED is version $(installed_version), not the $SHORT_VERSION just built."
+  echo "         Both claim $BUNDLE_ID, so Launchpad, Spotlight and \`open\` will use the installed one."
+  echo "         Run: scripts/release.sh --install"
+fi
