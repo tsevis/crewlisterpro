@@ -12,6 +12,19 @@ INSTALLED="/Applications/CrewListr Pro.app"
 # claiming the same bundle identifier as this one. LaunchServices answered
 # every launch with the stale copy — including `open` on the correct path —
 # and its own unrelated failure was read as this app being broken.
+# Ad-hoc signing makes every rebuild a different application to macOS, because
+# an ad-hoc identity IS the code hash. Anything granted to the app personally —
+# a Keychain item's access list, a TCC permission — is granted to one build and
+# lost with the next. Signing with a certificate makes the designated
+# requirement name the certificate instead, so it holds across rebuilds.
+# scripts/create-signing-identity.sh creates it; without one, ad-hoc still works.
+SIGNING_IDENTITY="${CREWLISTR_SIGNING_IDENTITY:-CrewListr Pro Local Signing}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -qF "$SIGNING_IDENTITY"; then
+  SIGN_AS="$SIGNING_IDENTITY"
+else
+  SIGN_AS="-"
+fi
+
 INSTALL=0
 for argument in "$@"; do
   case "$argument" in
@@ -53,8 +66,8 @@ done
 # install_name_tool rewrites load commands, which invalidates the linker's
 # ad-hoc signature. On Apple Silicon an invalid signature is fatal: the kernel
 # SIGKILLs the process at exec, with no output. Re-sign every rewritten binary.
-codesign --force --sign - "$APP/Contents/Frameworks/libsqlcipher.dylib"
-codesign --force --sign - "$APP/Contents/Resources/llama-server"
+codesign --force --sign "$SIGN_AS" "$APP/Contents/Frameworks/libsqlcipher.dylib"
+codesign --force --sign "$SIGN_AS" "$APP/Contents/Resources/llama-server"
 
 # Product metadata is read from Sources/CrewListrProMac/Version.swift so the
 # bundle can never disagree with the binary it wraps.
@@ -126,8 +139,15 @@ xattr -cr "$APP"
 # The bundle seal must be applied last, after Info.plist and every payload is
 # in place, or `codesign -v` reports a sealed-resource mismatch and macOS
 # refuses to launch the app.
-codesign --force --deep --sign - "$APP"
+codesign --force --deep --sign "$SIGN_AS" "$APP"
 codesign --verify --strict "$APP"
+if [[ "$SIGN_AS" == "-" ]]; then
+  echo "NOTE: signed ad-hoc; no '$SIGNING_IDENTITY' identity found."
+  echo "      Each rebuild will be a new app identity to macOS."
+  echo "      Run: scripts/create-signing-identity.sh"
+else
+  echo "Signed with $SIGN_AS"
+fi
 
 # Give the mounted volume the app's own icon rather than the generic disk.
 cp "$APP/Contents/Resources/$ICON_FILE.icns" "$APP/../.VolumeIcon.icns" 2>/dev/null || true

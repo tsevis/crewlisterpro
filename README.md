@@ -64,15 +64,38 @@ swift test
 ```
 
 ```bash
-./scripts/release.sh
+./scripts/release.sh --install
 ```
 
 `release.sh` produces a self-contained `.app` bundle and DMG including SQLCipher and the
 local llama.cpp runtime, builds `AppIcon.icns` from `Resources/AppIcon.png` — applying Apple's icon grid
 (an 824pt rounded body on a 1024pt canvas, with a shadow) and cutting all ten required
-sizes — ad-hoc signs every binary it rewrites, and stamps the bundle from
+sizes — signs every binary it rewrites, and stamps the bundle from
 `Sources/CrewListrProMac/Version.swift` so the Info.plist cannot drift from the binary.
 Apple Developer ID signing and notarization remain external steps.
+
+`--install` replaces `/Applications/CrewListr Pro.app` with the build just made, keeping
+the previous copy in the Trash. Without it the script warns when the installed copy is a
+different version: both bundles claim `com.tsevis.crewlisterpro`, and LaunchServices then
+answers every launch — including `open` on the correct path — with whichever it has
+registered, which is not necessarily the one just built.
+
+```bash
+./scripts/create-signing-identity.sh
+```
+
+Creates the local self-signed code-signing certificate `release.sh` prefers over ad-hoc
+signing (override the name with `CREWLISTR_SIGNING_IDENTITY`; it falls back to ad-hoc when
+no identity exists). It matters because an ad-hoc identity *is* the code hash, so every
+rebuild is a different application to macOS and anything granted to the app personally —
+a Keychain item's access list, a TCC permission — is granted to one build and lost with
+the next. With a certificate the designated requirement names the certificate instead:
+
+    identifier "com.tsevis.crewlisterpro" and certificate root = H"..."
+
+which holds across rebuilds. The certificate is local and self-signed: it is not a
+Developer ID and satisfies nothing on anyone else's Mac. Creating it asks for the login
+password once, because macOS requires that to trust a certificate for code signing.
 
 **Requires** Homebrew `sqlcipher` and `openssl@4`; `llama-server` on `PATH` (or
 `CREWLISTR_LLAMA_SERVER`) only if you package the optional local model.
