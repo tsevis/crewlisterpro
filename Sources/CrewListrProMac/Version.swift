@@ -5,7 +5,7 @@ import Foundation
 /// the Info.plist can never drift from the binary.
 enum AppVersion {
     /// Marketing version — CFBundleShortVersionString. Semantic versioning.
-    static let short = "0.1.8"
+    static let short = "0.1.9"
 
     /// Build number — CFBundleVersion. Monotonic, bumped by CI on every build.
     static let build = "1"
