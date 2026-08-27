@@ -81,6 +81,49 @@ final class BrandAssetTests: XCTestCase {
 
     // MARK: - Packaging
 
+    /// The bundle SwiftPM emits is a bare directory with no `Info.plist`.
+    /// `swift run` and `swift test` accept that; macOS 26 does not, and the
+    /// packaged app trapped inside the generated `Bundle.module` accessor while
+    /// building its first window. Every test above passes in either case,
+    /// because none of them looks at what was actually packaged — so this one
+    /// reads the built `.app` instead of the test host.
+    func testThePackagedResourceBundleIsARealBundle() throws {
+        let app = root.appending(path: "dist/CrewListr Pro.app")
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: app.path(percentEncoded: false)),
+                          "no packaged app in dist/; run scripts/release.sh")
+        let nested = app.appending(path: "Contents/Resources/CrewListrProMac_CrewListrProMac.bundle")
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: nested.appending(path: "Info.plist").path(percentEncoded: false)),
+            "the packaged resource bundle has no Info.plist, so macOS will not load it as a bundle"
+        )
+        let loaded = Bundle(url: nested)
+        XCTAssertNotNil(loaded, "macOS refused to open the packaged resource bundle")
+        XCTAssertNotNil(loaded?.url(forResource: "TsevisMark", withExtension: "png"),
+                        "the packaged bundle does not carry the maker's mark")
+    }
+
+    /// The marks must never be able to stop the app opening. `Bundle.module`
+    /// could: it is generated with a `fatalError` for the not-found case.
+    func testBrandResolvesItsBundleWithoutTheTrappingAccessor() throws {
+        let source = try String(contentsOf: root.appending(path: "Sources/CrewListrProMac/UI/Design/Brand.swift"),
+                                encoding: .utf8)
+        // Comments are stripped first: the file explains at length why it does
+        // not use that accessor, and naming it there is not using it.
+        let code = source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        XCTAssertFalse(code.contains("Bundle.module"),
+                       "Brand is back on Bundle.module, which traps instead of returning nil")
+    }
+
+    func testTheReleaseScriptGivesTheResourceBundleAnInfoPlist() throws {
+        let script = try String(contentsOf: root.appending(path: "scripts/release.sh"), encoding: .utf8)
+        XCTAssertTrue(script.contains("CFBundlePackageType</key><string>BNDL"),
+                      "release.sh no longer writes the resource bundle's Info.plist")
+    }
+
+
     /// SwiftPM emits the target's resources as a bundle beside the executable.
     /// A packaged build that does not copy it in shows the fallback glyphs.
     func testTheReleaseScriptCopiesTheResourceBundleIntoTheApp() throws {

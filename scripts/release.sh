@@ -170,6 +170,26 @@ if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
 fi
 cp -R "$RESOURCE_BUNDLE" "$APP/Contents/Resources/"
 
+# SwiftPM emits that bundle as a bare directory with no Info.plist. Under
+# `swift run` and `swift test` macOS accepted it anyway, so it looked fine
+# everywhere it was ever exercised; macOS 26 does not, `Bundle(url:)` returns
+# nil for it, and the packaged app died building its first window. Write the
+# minimal plist that makes the directory a real bundle.
+cat > "$APP/Contents/Resources/${RESOURCE_BUNDLE:t}/Info.plist" <<PLISTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>${BUNDLE_ID}.resources</string>
+    <key>CFBundleName</key><string>${RESOURCE_BUNDLE:t:r}</string>
+    <key>CFBundlePackageType</key><string>BNDL</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleShortVersionString</key><string>${SHORT_VERSION}</string>
+    <key>CFBundleVersion</key><string>${BUILD_VERSION}</string>
+</dict>
+</plist>
+PLISTEOF
+
 "$ROOT/scripts/make-icon.sh" "$ROOT/Resources/AppIcon.png" "$APP/Contents/Resources/$ICON_FILE.icns"
 
 cat > "$APP/Contents/Info.plist" <<EOF
