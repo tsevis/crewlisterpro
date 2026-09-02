@@ -144,7 +144,7 @@ struct FieldReviewPane: View {
         return VStack(alignment: .leading, spacing: 5) {
             Eyebrow(text: "Skipper's email")
 
-            ContactField(
+            CommitField(
                 placeholder: "skipper@example.com",
                 value: value,
                 isSuspect: validation.message != nil,
@@ -323,60 +323,5 @@ private struct FieldRow: View {
         }
         onEdit(canonical)
         draft = field.presented(canonical)
-    }
-}
-
-
-// MARK: - The skipper's email
-
-/// One line of contact detail, saved when the field is left.
-///
-/// Not a `FieldRow`: it is not read off the document, it has no confirm
-/// control, and confirming it against an image is meaningless — the whole point
-/// of `FieldRow` is that every value on it was checked against the page.
-private struct ContactField: View {
-    let placeholder: String
-    let value: String
-    let isSuspect: Bool
-    let onCommit: (String) -> Void
-
-    @State private var draft = ""
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        TextField(placeholder, text: $draft)
-            .textFieldStyle(.plain)
-            .font(Theme.Font.body)
-            .foregroundStyle(Theme.ink)
-            .focused($focused)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(Theme.panel)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous)
-                    .strokeBorder(border, lineWidth: 1)
-            )
-            .onSubmit { commit() }
-            .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
-            .onChange(of: value) { _, newValue in if !focused { draft = newValue } }
-            .onAppear { draft = value }
-    }
-
-    private var border: Color {
-        if focused { return Theme.accentText.opacity(0.55) }
-        return isSuspect ? Theme.caution.opacity(0.5) : Theme.hairlineStrong
-    }
-
-    private func commit() {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed != value else {
-            // Nothing to save, but the box may still be holding the whitespace
-            // that was trimmed away. Show what is actually stored.
-            draft = value
-            return
-        }
-        onCommit(trimmed)
-        draft = trimmed
     }
 }

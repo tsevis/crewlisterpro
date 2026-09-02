@@ -62,26 +62,35 @@ enum VoyageDate {
         calendar.startOfDay(for: date)
     }
 
-    /// The charter week a new trip starts as: the next Saturday, and the
-    /// Saturday after it. Charters in this trade run Saturday to Saturday, so
-    /// that is what the picker should already be showing before anyone touches
-    /// it — and any other pair of dates is one the operator chose on purpose.
-    static func charterWeek(from date: Date = .now, calendar: Calendar = .current) -> (departure: Date, arrival: Date) {
-        let departure = nextSaturday(onOrAfter: date, calendar: calendar)
-        let arrival = calendar.date(byAdding: .day, value: 7, to: departure) ?? departure
+    /// The dates a new trip starts as: the next charter day, and the end of a
+    /// charter's length from it.
+    ///
+    /// Saturday to Saturday by default, because that is what this trade runs
+    /// on — so it is what the pickers show before anyone touches them, and any
+    /// other pair of dates is one the operator chose on purpose. A fleet that
+    /// runs Wednesdays, or ten-day charters, says so once in Settings.
+    static func charterWeek(
+        from date: Date = .now,
+        startingOn weekday: Int = 7,
+        lastingDays days: Int = 7,
+        calendar: Calendar = .current
+    ) -> (departure: Date, arrival: Date) {
+        let departure = nextDay(weekday, onOrAfter: date, calendar: calendar)
+        let arrival = calendar.date(byAdding: .day, value: max(days, 0), to: departure) ?? departure
         return (departure, arrival)
     }
 
-    /// The first Saturday on or after `date`. Asked on a Saturday the answer is
-    /// that Saturday: the charter being prepared is the one leaving today, not
-    /// the one leaving in a week.
-    static func nextSaturday(onOrAfter date: Date, calendar: Calendar = .current) -> Date {
+    /// The first `weekday` on or after `date`, counted 1 Sunday … 7 Saturday.
+    /// Asked on the day itself the answer is that day: the charter being
+    /// prepared is the one leaving today, not the one leaving in a week.
+    static func nextDay(_ weekday: Int, onOrAfter date: Date, calendar: Calendar = .current) -> Date {
         let start = calendar.startOfDay(for: date)
-        // 7 is Saturday in every Gregorian calendar, whatever the locale's
-        // first day of the week is set to.
-        guard calendar.component(.weekday, from: start) != 7 else { return start }
+        // Weekday numbering is the same in every calendar identifier and does
+        // not move with the locale's first day of the week.
+        let wanted = (1...7).contains(weekday) ? weekday : 7
+        guard calendar.component(.weekday, from: start) != wanted else { return start }
         let next = calendar.nextDate(after: start,
-                                     matching: DateComponents(weekday: 7),
+                                     matching: DateComponents(weekday: wanted),
                                      matchingPolicy: .nextTime,
                                      direction: .forward)
         return next.map { calendar.startOfDay(for: $0) } ?? start

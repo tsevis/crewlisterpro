@@ -135,8 +135,8 @@ final class BackupTests: XCTestCase {
     }
 
     func testTheHistoryIsBounded() async throws {
-        XCTAssertGreaterThan(SecureStore.backupDepth, 1)
-        XCTAssertLessThanOrEqual(SecureStore.backupDepth, 100, "snapshots hold identity data; the history must not grow without limit")
+        XCTAssertGreaterThan(SecureStore.defaultBackupDepth, 1)
+        XCTAssertLessThanOrEqual(SecureStore.defaultBackupDepth, 100, "snapshots hold identity data; the history must not grow without limit")
     }
 
     // MARK: - Snapshots are encrypted at rest

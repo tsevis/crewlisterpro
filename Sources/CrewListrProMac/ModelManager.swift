@@ -51,6 +51,31 @@ actor ModelManager {
     /// Where a download would put this asset. Not necessarily where it is.
     func localURL(for asset: ModelAsset) -> URL { directory.appending(path: asset.fileName) }
 
+    /// This app's own directory of models, for showing an operator where the
+    /// gigabytes went.
+    var storageDirectory: URL { directory }
+
+    /// Deletes this app's copy of a model, and only this app's copy.
+    ///
+    /// `resolvedURL` deliberately also finds models in the HuggingFace hub
+    /// cache, which the operator downloaded through some other tool and which
+    /// this app has no business erasing. A Remove button that silently deleted
+    /// five gigabytes belonging to llama.cpp would be a bug of the worst kind:
+    /// invisible until the other program needed the file. So the only files
+    /// removed are the ones inside `directory`.
+    ///
+    /// Returns whether anything was actually removed.
+    @discardableResult
+    func removeDownload(_ manifest: ModelManifest) -> Bool {
+        var removed = false
+        for asset in manifest.assets {
+            let url = localURL(for: asset)
+            guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { continue }
+            if (try? FileManager.default.removeItem(at: url)) != nil { removed = true }
+        }
+        return removed
+    }
+
     /// Where the asset actually is, wherever that turns out to be.
     ///
     /// The app is not the only thing on this Mac that downloads models. Looking

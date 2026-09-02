@@ -59,6 +59,9 @@ struct RootView: View {
     @State private var importing = false
     @State private var showAbout = false
     @State private var pendingTripDeletion: Trip?
+    /// Held here rather than in `FleetScreen` so the yacht being looked at
+    /// survives a trip to another tab and back.
+    @State private var selectedBoatID: UUID?
 
     var body: some View {
         @Bindable var store = store
@@ -143,12 +146,19 @@ struct RootView: View {
     @ViewBuilder
     private var content: some View {
         switch screen {
+        case .fleet:
+            FleetScreen(selection: $selectedBoatID)
         case .people:
             PeopleScreen(importing: $importing)
         case .crewList:
             CrewListScreen()
         case .trip:
-            TripScreen()
+            TripScreen(onEditYacht: { boatID in
+                selectedBoatID = boatID
+                screen = .fleet
+            })
+        case .settings:
+            SettingsScreen()
         }
     }
 
@@ -161,15 +171,56 @@ struct RootView: View {
     @ViewBuilder
     private var commandLine: some View {
         switch screen {
+        case .fleet: fleetCommands
         case .people: peopleCommands
         case .crewList: crewListCommands
         case .trip: tripCommands
+        case .settings: settingsCommands
+        }
+    }
+
+    /// The fleet is not about one trip, so the strip of yachts has no place
+    /// here — the panel beside it is already the list of them.
+    private var fleetCommands: some View {
+        CommandBar {
+            Button {
+                selectedBoatID = store.addBoat()
+            } label: {
+                Label("Add Yacht", systemImage: "plus")
+            }
+            .buttonStyle(.philonPrimary)
+            .help("Add a yacht to the fleet")
+        } trailing: {
+            // Not offered for a retired yacht: `chosenBoatForNewTrip` will not
+            // pick one either, and the Fleet's own caption promises as much.
+            if let id = selectedBoatID, let boat = store.boat(withID: id), !boat.isRetired {
+                Button {
+                    let trip = store.createTrip(boatID: id)
+                    store.selectedTripID = trip
+                    screen = .trip
+                } label: {
+                    Label("New Trip with This Yacht", systemImage: "calendar.badge.plus")
+                }
+                .buttonStyle(.philonSecondary)
+            }
+        }
+    }
+
+    /// Nothing to do on Settings but change them, and each one is its own
+    /// control. The line still exists so the window does not jump.
+    private var settingsCommands: some View {
+        CommandBar {
+            Text("Defaults for this Mac. Nothing here leaves it.")
+                .font(Theme.Font.meta)
+                .foregroundStyle(Theme.inkTertiary)
+        } trailing: {
+            EmptyView()
         }
     }
 
     private var peopleCommands: some View {
         CommandBar {
-            TripStrip(onNewTrip: { store.createTrip(); screen = .trip },
+            TripStrip(onNewTrip: { boatID in store.createTrip(boatID: boatID); screen = .trip },
                       onDeleteTrip: { pendingTripDeletion = store.selectedTrip })
 
             Button { importing = true } label: {
@@ -214,7 +265,7 @@ struct RootView: View {
     // of how they differ.
     private var crewListCommands: some View {
         CommandBar {
-            TripStrip(onNewTrip: { store.createTrip(); screen = .trip },
+            TripStrip(onNewTrip: { boatID in store.createTrip(boatID: boatID); screen = .trip },
                       onDeleteTrip: { pendingTripDeletion = store.selectedTrip })
         } trailing: {
             ExportButton()
@@ -223,7 +274,7 @@ struct RootView: View {
 
     private var tripCommands: some View {
         CommandBar {
-            TripStrip(onNewTrip: { store.createTrip(); screen = .trip },
+            TripStrip(onNewTrip: { boatID in store.createTrip(boatID: boatID); screen = .trip },
                       onDeleteTrip: { pendingTripDeletion = store.selectedTrip })
         } trailing: {
             Button { screen = .people } label: {

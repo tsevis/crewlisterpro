@@ -13,13 +13,14 @@ import SwiftUI
 /// end, because those are the ones you look for only when you want them.
 struct TripStrip: View {
     @Environment(CrewStore.self) private var store
-    let onNewTrip: () -> Void
+    /// Charters the yacht named, or lets the store decide when it is nil.
+    let onNewTrip: (UUID?) -> Void
     let onDeleteTrip: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
             if store.data.trips.isEmpty {
-                Button("New Trip", systemImage: "plus", action: onNewTrip)
+                Button("New Trip", systemImage: "plus") { onNewTrip(nil) }
                     .buttonStyle(.philonSecondary)
             } else {
                 strip
@@ -82,7 +83,18 @@ struct TripStrip: View {
 
     private var actions: some View {
         Menu {
-            Button("New Trip", action: onNewTrip)
+            // A submenu only where there is a choice to make. With one yacht in
+            // the fleet, or none yet, "which yacht" is not a question and
+            // asking it would be ceremony.
+            if store.fleet.count > 1 {
+                Menu("New Trip") {
+                    ForEach(store.fleet) { boat in
+                        Button(boat.isComplete ? boat.name : "Untitled yacht") { onNewTrip(boat.id) }
+                    }
+                }
+            } else {
+                Button("New Trip") { onNewTrip(nil) }
+            }
             Divider()
             if store.selectedTrip?.isArchived == true {
                 Button("Restore This Trip") {

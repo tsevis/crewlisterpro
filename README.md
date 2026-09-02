@@ -18,6 +18,38 @@ against the document image.**
 
 ---
 
+## The fleet
+
+Every yacht you charter, described once. Name, flag, port of registry and
+registration number are facts about the vessel, not about this August's booking —
+so they are held on the yacht and read by every crew list made for it, instead of
+being retyped per trip with four fresh chances a season to send a port authority
+the wrong registration number.
+
+- **Add, duplicate, retire, delete.** Duplicating gives you a sister ship:
+  everything but the name and the registration number. Retiring takes a sold
+  yacht out of the picker while leaving it named on its past crew lists — a
+  charter can be queried long after it sailed. A yacht any trip still uses cannot
+  be deleted, and the button says which trips.
+- **A preview of the header boxes**, showing exactly what those four values will
+  print as, with a warning when one would print blank.
+- Trips pick a yacht from the fleet. One yacht in the fleet is not a choice, so
+  it is used without asking; set a default in Settings when there are several.
+
+## Settings
+
+Defaults for this Mac, grouped by the moment each one applies: when a trip is
+made (charter start day and length, which yacht), when a yacht is added (flag and
+port of registry, since most fleets share both), what an export writes (CSV, PDF
+or both; the file-name prefix; a standing folder or ask-each-time; reveal
+afterwards), the optional local model, and how many earlier versions of the
+database are kept.
+
+Two sections are about what is deliberately **not** configurable. Nothing there
+can skip the review — there is no preference to auto-confirm a field, to trust a
+clean check digit, or to export a document nobody has looked at. And nothing
+sends anything anywhere: no server, no account, no sync.
+
 ## The review pane
 
 ![CrewListr Pro review pane](docs/screenshots/01-review.png)
@@ -163,7 +195,7 @@ CREWLISTR_FIXTURES=/path/to/documents CREWLISTR_OUTPUT=./TestOutput swift test -
 
 ## Testing
 
-409 tests, no unexpected failures. Eighteen are opt-in and skip unless their environment
+453 tests, no unexpected failures. Eighteen are opt-in and skip unless their environment
 variable is set — they touch real identity documents or the live encrypted store.
 
 | Suite | Covers |
@@ -173,6 +205,8 @@ variable is set — they touch real identity documents or the live encrypted sto
 | `ExportServiceTests` | CSV structure and injection safety, PDF pagination and content |
 | `ExportClientTests` | The client signature block, the skipper's email, and which file gets which date format |
 | `DateFormatTests` | Voyage days across time zones, the Saturday charter week, `20 OCT 1972` both ways |
+| `FleetTests` | Keeping, retiring and deleting a yacht, and which one a new trip charters |
+| `SettingsTests` | The defaults, the guards on them, and what each one changes |
 | `VoyageAndClientTests` | Picking dates, naming the client, and where the skipper's email lives |
 | `DocumentProcessorTests` | Rotate, crop and enhance |
 | `StoragePathTests` | The application-support path and SQLCipher open |
@@ -228,21 +262,28 @@ Sources/CrewListrProMac/
   OCRService.swift       Vision text recognition
   DocumentProcessor.swift Rotate, crop, enhance
   CrewStore.swift        Observable state; the single writer to the encrypted store
+  CrewStoreFleet.swift   The fleet: keeping, retiring and chartering a yacht
+  CrewStoreReview.swift  Confirming fields, roles, the client and the skipper's email
   SecureStore.swift      SQLCipher + AES-GCM + Keychain
   ModelManager.swift     Local model download with integrity checking
   LlamaVisionRescuer.swift  Optional local VLM
   ExportService.swift    CSV and the printed crew list
   DateFormats.swift      Voyage days vs. document dates, and the charter week
+  Settings.swift         The operator's defaults, and the guards on them
   HeadlessExport.swift   The --export / --list command line
   UI/
     AppShell.swift       App entry, the window shell, storage-failure view
     AppChrome.swift      Screen row, command line, panels and banners
     TripStrip.swift      The horizontal strip of yachts, and what can be done to one
+    FleetScreen.swift    The fleet, and the yacht being looked at
+    FleetDetail.swift    One yacht: its four printed values, and what they look like
+    SettingsScreen.swift Every default, grouped by when it applies
     DocumentColumn.swift Documents, review status, export readiness
     ReviewDetail.swift   The field-by-field review pane, the client and the skipper's email
     DocumentPreview.swift Decrypted image with zoom and rotate
     TripScreen.swift     Yacht, voyage dates and earlier versions
     CrewListScreen.swift Crew-list preview, blockers and export
+    Design/              Theme, shared components and the brand assets
 ```
 
 ---

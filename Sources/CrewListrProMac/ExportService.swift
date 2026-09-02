@@ -10,16 +10,35 @@ enum ExportService {
 
     /// Includes the yacht so two trips departing the same day cannot overwrite
     /// each other, and stays filesystem-safe on every platform.
-    static func fileNameStem(boat: Boat, trip: Trip) -> String {
+    static func fileNameStem(boat: Boat, trip: Trip, prefix: String = AppSettings.defaultFileNamePrefix) -> String {
         let yacht = sanitised(boat.name.isEmpty ? "yacht" : boat.name)
+        // Already made filesystem-safe by `AppSettings.normalised()`, and
+        // sanitised again here because this function is also reachable with a
+        // prefix that never went through the settings.
+        // Case-preserving, unlike the yacht: the shipped default is
+        // "crew-list" and CREW-LIST is not the same word to anyone sorting a
+        // folder of these.
+        let stem = sanitised(prefix, uppercased: false)
         // ISO here and nowhere else on the printed form: a file name is sorted,
         // not read aloud, and `2026-08-29` sorts and `29 AUG 2026` does not.
-        return "crew-list-\(yacht)-\(VoyageDate.iso(trip.departureDate))"
+        return "\(stem.isEmpty ? AppSettings.defaultFileNamePrefix : stem)-\(yacht)-\(VoyageDate.iso(trip.departureDate))"
     }
 
-    private static func sanitised(_ value: String) -> String {
+    private static func sanitised(_ value: String, uppercased: Bool = true) -> String {
+        fileSafe(value, uppercased: uppercased)
+    }
+
+    /// The one rule for what may appear in a file name this app writes:
+    /// letters, digits, dash and underscore, with everything else collapsed to
+    /// a single dash.
+    ///
+    /// `AppSettings` validates the operator's file-name prefix through this
+    /// rather than keeping its own copy. Two implementations of "what is safe
+    /// in a file name" is two answers, and they drift.
+    static func fileSafe(_ value: String, uppercased: Bool = false) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let mapped = value.uppercased().unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+        let source = uppercased ? value.uppercased() : value
+        let mapped = source.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
         return String(mapped).split(separator: "-").joined(separator: "-")
     }
 

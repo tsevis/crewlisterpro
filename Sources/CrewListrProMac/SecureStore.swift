@@ -56,6 +56,15 @@ actor SecureStore {
     private let keyData: Data
     private var database: OpaquePointer?
 
+    /// Where everything this app keeps lives: the encrypted database, its key,
+    /// the sealed originals and the snapshots. Exposed so Settings can show the
+    /// operator the folder rather than describing it.
+    nonisolated static func dataFolder(fileManager: FileManager = .default) -> URL? {
+        try? fileManager
+            .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+            .appending(path: "CrewListrPro", directoryHint: .isDirectory)
+    }
+
     init(fileManager: FileManager = .default) throws {
         let support = try fileManager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         let root = support.appending(path: "CrewListrPro", directoryHint: .isDirectory)
@@ -100,9 +109,27 @@ actor SecureStore {
     // except by re-importing every source document, which only worked because
     // those documents happened to still exist.
 
-    /// How many snapshots are kept. They are a few tens of kilobytes each, so
-    /// depth costs nothing and buys a long way back.
-    static let backupDepth = 30
+    /// How many snapshots are kept by default. They are a few tens of kilobytes
+    /// each, so depth costs nothing and buys a long way back.
+    static let defaultBackupDepth = AppSettings.defaultVersionsKept
+
+    /// The depth actually in force. Settable, because it is a setting — but it
+    /// lives here rather than being read from `AppData` on every prune, so the
+    /// store never has to reach back into the state it is storing.
+    private var backupDepth = SecureStore.defaultBackupDepth
+
+    /// Sets the cap. Deliberately does NOT prune.
+    ///
+    /// The setting is a stepper, and a stepper auto-repeats when held: pruning
+    /// here meant that dragging it from 200 down to 2 destroyed the operator's
+    /// entire recovery history in about a second, irreversibly, with nothing
+    /// asked. The cap takes effect the next time a snapshot is written, which
+    /// is soon enough for a limit whose purpose is to stop the history growing
+    /// without bound — and which gives an operator who mis-clicked the chance
+    /// to put it back.
+    func setBackupDepth(_ depth: Int) {
+        backupDepth = min(max(depth, AppSettings.fewestVersionsKept), AppSettings.mostVersionsKept)
+    }
 
     struct Backup: Identifiable, Sendable {
         let id: String
@@ -146,8 +173,8 @@ actor SecureStore {
     private func pruneBackups() {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: backupsURL.path(percentEncoded: false)) else { return }
         let ordered = names.filter { $0.hasSuffix(".bin") }.sorted()
-        guard ordered.count > Self.backupDepth else { return }
-        for name in ordered.prefix(ordered.count - Self.backupDepth) {
+        guard ordered.count > backupDepth else { return }
+        for name in ordered.prefix(ordered.count - backupDepth) {
             try? FileManager.default.removeItem(at: backupsURL.appending(path: name))
         }
     }

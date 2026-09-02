@@ -22,27 +22,38 @@ import SwiftUI
 /// of these is that — both are places an operator moves between while working,
 /// which is a screen.
 enum Screen: String, CaseIterable, Identifiable {
+    case fleet
     case trip
     case people
     case crewList
+    case settings
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
+        case .fleet: "Fleet"
         case .trip: "Trip"
         case .people: "People"
         case .crewList: "Crew List"
+        case .settings: "Settings"
         }
     }
 
     var symbol: String {
         switch self {
-        case .trip: "sailboat"
+        case .fleet: "sailboat"
+        case .trip: "calendar"
         case .people: "person.2"
         case .crewList: "list.bullet.rectangle"
+        case .settings: "gearshape"
         }
     }
+
+    /// Settings sits apart from the four screens the work moves through. It is
+    /// not a step — nobody passes through it on the way to a crew list — so the
+    /// row puts it after a gap rather than at the end of the sequence.
+    var isWorkflowStep: Bool { self != .settings }
 }
 
 // MARK: - The screen row
@@ -57,7 +68,7 @@ struct ScreenRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(Screen.allCases) { screen in
+            ForEach(Screen.allCases.filter(\.isWorkflowStep)) { screen in
                 ScreenTab(
                     screen: screen,
                     isActive: selection == screen,
@@ -68,6 +79,10 @@ struct ScreenRow: View {
             }
 
             Spacer(minLength: 16)
+
+            ScreenTab(screen: .settings, isActive: selection == .settings, count: nil) {
+                selection = .settings
+            }
 
             SystemStatusChip(symbol: "lock.shield.fill", text: "On this Mac only")
                 .help("Documents, extracted fields and the database never leave this machine.")

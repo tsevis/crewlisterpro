@@ -114,6 +114,20 @@ struct ExportButton: View {
     @Environment(CrewStore.self) private var store
     @State private var exported: URL?
 
+    /// Names what will be written and where, so the operator is never guessing
+    /// which of the two it is about to do.
+    private var exportLabel: String {
+        guard let folder = store.standingExportFolder else { return "Export \(store.settings.exportDescription)…" }
+        return "Export to \(folder.lastPathComponent)"
+    }
+
+    private var exportHelp: String {
+        guard let folder = store.standingExportFolder else {
+            return "Write \(store.settings.exportDescription) into a folder you choose"
+        }
+        return "Write \(store.settings.exportDescription) into \(folder.path(percentEncoded: false)) — set in Settings. Right-click to choose a different folder."
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             if let exported {
@@ -127,33 +141,48 @@ struct ExportButton: View {
             }
 
             Button {
-                export()
+                export(askingForFolder: false)
             } label: {
-                Label("Export CSV and PDF…", systemImage: "square.and.arrow.up")
+                Label(exportLabel, systemImage: "square.and.arrow.up")
             }
             .buttonStyle(.philonPrimary)
             .disabled(!store.exportBlockers.isEmpty)
-            .help(store.exportBlockers.isEmpty
-                  ? "Write the crew list beside a folder you choose"
-                  : store.exportBlockers.joined(separator: "\n"))
+            .help(store.exportBlockers.isEmpty ? exportHelp : store.exportBlockers.joined(separator: "\n"))
+            // Only when a standing folder would otherwise decide for them. With
+            // none set the primary button already asks, and a second control
+            // saying the same thing invites the question of how they differ.
+            .contextMenu {
+                if store.standingExportFolder != nil {
+                    Button("Export To…") { export(askingForFolder: true) }
+                }
+            }
         }
     }
 
-    private func export() {
+    /// The folder set in Settings, or the one the operator picks now.
+    private func export(askingForFolder: Bool) {
+        guard let directory = askingForFolder ? chooseFolder() : (store.standingExportFolder ?? chooseFolder()) else { return }
+        do {
+            let written = try store.exportSelectedTrip(to: directory)
+            exported = directory
+            if store.settings.revealsAfterExport, !written.isEmpty {
+                NSWorkspace.shared.activateFileViewerSelecting(written)
+            }
+        } catch {
+            store.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func chooseFolder() -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.prompt = "Export Here"
-        panel.message = "Choose the folder for the crew list CSV and PDF."
+        panel.message = "Choose the folder for \(store.settings.exportDescription)."
         // A directory picker, not a save panel whose filename was then thrown
         // away in favour of its parent directory.
-        guard panel.runModal() == .OK, let directory = panel.url else { return }
-        do {
-            try store.exportSelectedTrip(to: directory)
-            exported = directory
-        } catch {
-            store.errorMessage = error.localizedDescription
-        }
+        guard panel.runModal() == .OK else { return nil }
+        return panel.url
     }
 }
