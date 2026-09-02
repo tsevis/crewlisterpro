@@ -285,6 +285,25 @@ struct CrewAssignment: Codable, Identifiable, Hashable {
     var personID: UUID
     var role: CrewRole = .passenger
     var notes: String = ""
+
+    /// The one person on this trip who signs the papers.
+    ///
+    /// Deliberately not a third `CrewRole`. The client is whoever chartered the
+    /// yacht and they are aboard as either the skipper or a passenger — a role
+    /// case would force a choice between the two facts and lose one of them.
+    /// Exactly one assignment per trip carries this; `CrewStore.setClient`
+    /// is what keeps that true.
+    var isClient: Bool = false
+
+    /// Reachable by email. Only the skipper's is asked for or printed: it is
+    /// the address a port authority or charter base writes to about the vessel,
+    /// and collecting an address for every passenger would be collecting
+    /// personal data nothing on the crew list needs.
+    ///
+    /// Held on the assignment rather than on the person, so it follows the
+    /// skippering of *this* trip — naming a new skipper brings their address
+    /// with them instead of leaving the old one on the form.
+    var email: String = ""
 }
 
 extension CrewAssignment {
@@ -299,6 +318,14 @@ extension CrewAssignment {
         personID = try container.decode(UUID.self, forKey: .personID)
         role = (try? container.decode(CrewRole.self, forKey: .role)) ?? .passenger
         notes = (try? container.decode(String.self, forKey: .notes)) ?? ""
+        // Both added after operators had real data on disk. `try?` covers the
+        // key simply not being there — Swift's synthesised decoding would throw
+        // `keyNotFound` and take the assignment with it. Not being the client
+        // is the safe direction: an unnamed signatory is a blank line on the
+        // form, a wrongly named one is a signature attributed to the wrong
+        // person.
+        isClient = (try? container.decode(Bool.self, forKey: .isClient)) ?? false
+        email = (try? container.decode(String.self, forKey: .email)) ?? ""
     }
 }
 
@@ -316,8 +343,17 @@ struct CrewListRow: Hashable, Identifiable, Sendable {
     var sex: String
     var expiryDate: String
     var role: CrewRole
+    var isClient: Bool
 
-    init(document: CrewDocument, role: CrewRole) {
+    /// The birth date as the passport itself prints it — `16 DEC 1984`. The
+    /// stored value stays ISO-8601, which is what the CSV and every validation
+    /// rule read; only what a person looks at changes.
+    ///
+    /// No expiry equivalent: the expiry is not a column on the printed form and
+    /// stays ISO in the CSV, so there would be nothing to read it.
+    var printedBirthDate: String { DocumentDate.display(birthDate) }
+
+    init(document: CrewDocument, role: CrewRole, isClient: Bool = false) {
         fullName = document[.fullName]
         documentNumber = document[.documentNumber]
         nationality = document[.nationality]
@@ -325,6 +361,7 @@ struct CrewListRow: Hashable, Identifiable, Sendable {
         sex = document[.sex]
         expiryDate = document[.expiryDate]
         self.role = role
+        self.isClient = isClient
     }
 }
 

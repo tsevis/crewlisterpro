@@ -147,7 +147,8 @@ enum HeadlessExport {
             }
             let (trip, boat) = try resolveTrip(in: data, named: request.tripName)
             let rows = try crewRows(in: data, for: trip, boat: boat)
-            let written = try write(rows, trip: trip, boat: boat, into: request.directory!)
+            let email = data.assignments.first { $0.tripID == trip.id && $0.role == .skipper }?.email ?? ""
+            let written = try write(rows, trip: trip, boat: boat, skipperEmail: email, into: request.directory!)
             log("Exported \(rows.count) crew for \(boat.name):")
             for url in written { log("  " + url.path(percentEncoded: false)) }
             return 0
@@ -163,7 +164,7 @@ enum HeadlessExport {
             let boat = data.boats.first { $0.id == trip.boatID }
             let documents = data.documents.filter { $0.tripID == trip.id }
             let cleared = documents.filter { $0.canExport() }.count
-            let dates = "\(CrewFieldValidator.iso8601String(trip.departureDate)) → \(CrewFieldValidator.iso8601String(trip.returnDate))"
+            let dates = "\(VoyageDate.iso(trip.departureDate)) → \(VoyageDate.iso(trip.returnDate))"
             // Marked, so `--list` does not present a put-away charter as though
             // it were still being worked on.
             let archived = trip.isArchived ? "  [archived]" : ""
@@ -222,20 +223,22 @@ enum HeadlessExport {
         let documents = data.documents.filter { $0.tripID == trip.id }
         let rows = documents.map { document -> CrewListRow in
             let assignment = data.assignments.first { $0.tripID == trip.id && $0.personID == document.personID }
-            return CrewListRow(document: document, role: assignment?.role ?? .passenger)
+            return CrewListRow(document: document,
+                               role: assignment?.role ?? .passenger,
+                               isClient: assignment?.isClient ?? false)
         }
         return rows.sorted { lhs, rhs in
             lhs.role == rhs.role ? lhs.fullName < rhs.fullName : lhs.role == .skipper
         }
     }
 
-    private static func write(_ rows: [CrewListRow], trip: Trip, boat: Boat, into directory: URL) throws -> [URL] {
+    private static func write(_ rows: [CrewListRow], trip: Trip, boat: Boat, skipperEmail: String, into directory: URL) throws -> [URL] {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let base = ExportService.fileNameStem(boat: boat, trip: trip)
         let csv = directory.appending(path: "\(base).csv")
         let pdf = directory.appending(path: "\(base).pdf")
-        try ExportService.exportCSV(to: csv, trip: trip, boat: boat, rows: rows)
-        try ExportService.exportPDF(to: pdf, trip: trip, boat: boat, rows: rows)
+        try ExportService.exportCSV(to: csv, trip: trip, boat: boat, rows: rows, skipperEmail: skipperEmail)
+        try ExportService.exportPDF(to: pdf, trip: trip, boat: boat, rows: rows, skipperEmail: skipperEmail)
         return [csv, pdf]
     }
 

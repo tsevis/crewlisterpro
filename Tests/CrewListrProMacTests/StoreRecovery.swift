@@ -107,7 +107,7 @@ final class StoreRecovery: XCTestCase {
         print("\n--- store rebuilt ---")
         if let boat = reloaded.boats.first, let trip = reloaded.trips.first {
             print("  \(boat.name) · \(boat.flag) · \(boat.registrationPort) · \(boat.registrationNumber)")
-            print("  \(CrewFieldValidator.iso8601String(trip.departureDate)) → \(CrewFieldValidator.iso8601String(trip.returnDate))")
+            print("  \(VoyageDate.iso(trip.departureDate)) → \(VoyageDate.iso(trip.returnDate))")
         }
         for document in reloaded.documents.sorted(by: { $0.documentNumber < $1.documentNumber }) {
             let role = reloaded.assignments.first { $0.personID == document.personID }?.role ?? .passenger

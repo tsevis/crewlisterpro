@@ -1,4 +1,4 @@
-﻿role,full_name,document_number,nationality,birth_date,sex,expiry_date,yacht,flag,registry_port,registration_number,departure_date,return_date
-"skipper","ANNA MARIA ERIKSSON","L898902C3","UTO","1974-08-12","F","2032-04-15","S/Y ELPIDA","GRC","PIRAEUS","GR-1187-P","2025-09-01","2025-09-08"
-"passenger","NIKOLAOS PAPADOPOULOS","AB1234567","GREEK","1983-02-19","M","2031-06-30","S/Y ELPIDA","GRC","PIRAEUS","GR-1187-P","2025-09-01","2025-09-08"
-"passenger","GIULIA ROSSI","YA9876543","ITALIAN","1995-07-04","F","2029-09-13","S/Y ELPIDA","GRC","PIRAEUS","GR-1187-P","2025-09-01","2025-09-08"
+﻿role,full_name,document_number,nationality,birth_date,sex,expiry_date,yacht,flag,registry_port,registration_number,departure_date,return_date,skipper_email,is_client
+"skipper","ANNA MARIA ERIKSSON","L898902C3","UTO","1974-08-12","F","2032-04-15","S/Y ELPIDA","GRC","PIRAEUS","GR-1187-P","2025-09-01","2025-09-08","skipper@example.com","no"
+"passenger","NIKOLAOS PAPADOPOULOS","AB1234567","GREEK","1983-02-19","M","2031-06-30","S/Y ELPIDA","GRC","PIRAEUS","GR-1187-P","2025-09-01","2025-09-08","skipper@example.com","yes"
+"passenger","GIULIA ROSSI","YA9876543","ITALIAN","1995-07-04","F","2029-09-13","S/Y ELPIDA","GRC","PIRAEUS","GR-1187-P","2025-09-01","2025-09-08","skipper@example.com","no"

@@ -158,8 +158,11 @@ final class CrewStore {
     @discardableResult
     func createTrip() -> UUID {
         let boat = Boat(name: Boat.placeholderName)
-        let departure = Calendar.current.startOfDay(for: .now)
-        let trip = Trip(boatID: boat.id, departureDate: departure, returnDate: Calendar.current.date(byAdding: .day, value: 7, to: departure) ?? departure)
+        // Charters in this trade run Saturday to Saturday, so a new trip opens
+        // on the next one rather than on today. Any other pair of dates is one
+        // the operator picked on purpose.
+        let week = VoyageDate.charterWeek()
+        let trip = Trip(boatID: boat.id, departureDate: week.departure, returnDate: week.arrival)
         data.boats.append(boat)
         data.trips.append(trip)
         selectedTripID = trip.id
@@ -186,10 +189,38 @@ final class CrewStore {
     func updateTrip(_ trip: Trip) {
         guard let index = data.trips.firstIndex(where: { $0.id == trip.id }) else { return }
         var updated = trip
+        // Stripped to the start of the day in the operator's own calendar. A
+        // voyage date is a day, not an instant, and one stored at 14:37 crosses
+        // a day boundary as soon as anything reads it from another time zone.
+        updated.departureDate = VoyageDate.day(updated.departureDate)
+        updated.returnDate = VoyageDate.day(updated.returnDate)
         // A return before departure is always a typo; clamp rather than export it.
         if updated.returnDate < updated.departureDate { updated.returnDate = updated.departureDate }
         data.trips[index] = updated
         persist()
+    }
+
+    /// Moves the departure, and the return with it.
+    ///
+    /// The charter keeps its length: an operator shifting a week-long trip by a
+    /// fortnight means a week starting a fortnight later, not a three-week
+    /// voyage. Picking the return afterwards overrides that, which is what
+    /// `setReturnDate` is for.
+    func setDepartureDate(_ date: Date, onTripWith id: UUID) {
+        guard let trip = data.trips.first(where: { $0.id == id }) else { return }
+        let departure = VoyageDate.day(date)
+        let length = Calendar.current.dateComponents([.day], from: VoyageDate.day(trip.departureDate),
+                                                     to: VoyageDate.day(trip.returnDate)).day ?? 0
+        var updated = trip
+        updated.departureDate = departure
+        updated.returnDate = Calendar.current.date(byAdding: .day, value: length, to: departure) ?? departure
+        updateTrip(updated)
+    }
+
+    func setReturnDate(_ date: Date, onTripWith id: UUID) {
+        guard var trip = data.trips.first(where: { $0.id == id }) else { return }
+        trip.returnDate = VoyageDate.day(date)
+        updateTrip(trip)
     }
 
     /// Puts a finished charter away. Destroys nothing.
@@ -355,7 +386,7 @@ final class CrewStore {
     }
 
     func setRole(_ role: CrewRole, forPersonID personID: UUID) {
-        guard let tripID = selectedTripID else { return }
+        guard let tripID = selectedTripID, isAboard(personID, on: tripID) else { return }
         if role == .skipper {
             for index in data.assignments.indices where data.assignments[index].tripID == tripID {
                 data.assignments[index].role = data.assignments[index].personID == personID ? .skipper : .passenger
@@ -367,7 +398,78 @@ final class CrewStore {
     }
 
     func role(forPersonID personID: UUID) -> CrewRole {
-        data.assignments.first { $0.tripID == selectedTripID && $0.personID == personID }?.role ?? .passenger
+        assignment(forPersonID: personID)?.role ?? .passenger
+    }
+
+    // MARK: - The client, and how to reach the skipper
+
+    /// Names the one person on this trip who signs the papers, or clears them.
+    ///
+    /// Independent of the role on purpose: the client chartered the yacht and
+    /// is aboard as either the skipper or a passenger, and `setRole` must
+    /// therefore leave this alone. Naming a new client clears the previous one,
+    /// the same way naming a skipper demotes the previous — a form with two
+    /// signatories says nothing about who is answerable for the vessel.
+    func setClient(_ isClient: Bool, forPersonID personID: UUID) {
+        guard let tripID = selectedTripID, isAboard(personID, on: tripID) else { return }
+        for index in data.assignments.indices where data.assignments[index].tripID == tripID {
+            let isThisPerson = data.assignments[index].personID == personID
+            if isClient {
+                // Naming one names exactly one.
+                data.assignments[index].isClient = isThisPerson
+            } else if isThisPerson {
+                data.assignments[index].isClient = false
+            }
+        }
+        persist()
+    }
+
+    func isClient(personID: UUID) -> Bool {
+        assignment(forPersonID: personID)?.isClient ?? false
+    }
+
+    /// The email address for one person on this trip. Only the skipper's is
+    /// asked for in the interface and only the skipper's is printed, but the
+    /// address is stored against whoever it was typed for, so promoting a
+    /// passenger brings their address with them instead of stranding it.
+    func setEmail(_ email: String, forPersonID personID: UUID) {
+        guard let tripID = selectedTripID,
+              let index = data.assignments.firstIndex(where: { $0.tripID == tripID && $0.personID == personID })
+        else { return }
+        data.assignments[index].email = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        persist()
+    }
+
+    func email(forPersonID personID: UUID) -> String {
+        assignment(forPersonID: personID)?.email ?? ""
+    }
+
+    /// The address printed on the crew list: the current skipper's, and nobody
+    /// else's.
+    var skipperEmail: String {
+        guard let tripID = selectedTripID else { return "" }
+        return skipperEmail(forTripID: tripID)
+    }
+
+    func skipperEmail(forTripID tripID: UUID) -> String {
+        data.assignments.first { $0.tripID == tripID && $0.role == .skipper }?.email ?? ""
+    }
+
+    private func assignment(forPersonID personID: UUID) -> CrewAssignment? {
+        data.assignments.first { $0.tripID == selectedTripID && $0.personID == personID }
+    }
+
+    /// Whether this person has an assignment on this trip.
+    ///
+    /// Both `setRole` and `setClient` sweep every assignment on the trip to
+    /// enforce "exactly one", so a personID that matches none of them would
+    /// clear the lot: naming a stranger as client would un-name the real one,
+    /// and naming one as skipper would demote the real skipper and block the
+    /// export. The rest of the store already treats a missing assignment as
+    /// possible — `crewRows` and `role(forPersonID:)` both default it — so
+    /// these two must not be the only places that assume it cannot happen.
+    private func isAboard(_ personID: UUID, on tripID: UUID) -> Bool {
+        data.assignments.contains { $0.tripID == tripID && $0.personID == personID }
     }
 
     // MARK: - Original image
@@ -618,7 +720,9 @@ final class CrewStore {
             .filter { $0.tripID == tripID }
             .map { document in
                 let assigned = data.assignments.first { $0.tripID == tripID && $0.personID == document.personID }
-                return CrewListRow(document: document, role: assigned?.role ?? .passenger)
+                return CrewListRow(document: document,
+                                   role: assigned?.role ?? .passenger,
+                                   isClient: assigned?.isClient ?? false)
             }
             .sorted { lhs, rhs in
                 if lhs.role != rhs.role { return lhs.role == .skipper }
@@ -631,8 +735,9 @@ final class CrewStore {
         guard selectedTripCanExport else { throw ExportError.blocked(exportBlockers) }
         let rows = crewRows(forTripID: trip.id)
         let base = ExportService.fileNameStem(boat: boat, trip: trip)
-        try ExportService.exportCSV(to: directory.appending(path: "\(base).csv"), trip: trip, boat: boat, rows: rows)
-        try ExportService.exportPDF(to: directory.appending(path: "\(base).pdf"), trip: trip, boat: boat, rows: rows)
+        let email = skipperEmail(forTripID: trip.id)
+        try ExportService.exportCSV(to: directory.appending(path: "\(base).csv"), trip: trip, boat: boat, rows: rows, skipperEmail: email)
+        try ExportService.exportPDF(to: directory.appending(path: "\(base).pdf"), trip: trip, boat: boat, rows: rows, skipperEmail: email)
     }
 
     // MARK: - Internals

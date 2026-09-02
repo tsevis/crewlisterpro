@@ -61,13 +61,15 @@ struct TripScreen: View {
                             section("Voyage") {
                                 datePicker("Departure", selection: Binding(
                                     get: { current.departureDate },
-                                    set: { trip?.departureDate = $0; save() }
+                                    set: { pickDeparture($0) }
                                 ), range: nil)
                                 rule
                                 datePicker("Return", selection: Binding(
                                     get: { current.returnDate },
-                                    set: { trip?.returnDate = $0; save() }
+                                    set: { pickReturn($0) }
                                 ), range: current.departureDate...)
+                                rule
+                                caption("A new trip already runs Saturday to Saturday. Moving the departure moves the return with it and keeps the charter the same length; pick a return date to override that.")
                             }
                         }
 
@@ -127,6 +129,22 @@ struct TripScreen: View {
     private func save() {
         store.updateBoat(boat)
         if let trip { store.updateTrip(trip) }
+    }
+
+    /// Both go through the store rather than mutating the local copy, because
+    /// the store is where the day is normalised and where the return is carried
+    /// along — and the local copy is then re-read so the pickers show what was
+    /// actually stored rather than what was asked for.
+    private func pickDeparture(_ date: Date) {
+        guard let id = trip?.id else { return }
+        store.setDepartureDate(date, onTripWith: id)
+        trip = store.data.trips.first { $0.id == id }
+    }
+
+    private func pickReturn(_ date: Date) {
+        guard let id = trip?.id else { return }
+        store.setReturnDate(date, onTripWith: id)
+        trip = store.data.trips.first { $0.id == id }
     }
 
     private func normaliseAndSave() {
@@ -229,6 +247,16 @@ struct TripScreen: View {
 
     private var rule: some View {
         Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, 138)
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Font.meta)
+            .foregroundStyle(Theme.inkTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
     }
 
     private func field(_ label: String, placeholder: String, text: Binding<String>) -> some View {

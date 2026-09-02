@@ -233,12 +233,13 @@ actor LlamaVisionRescuer {
         let parts = trimmed.uppercased().components(separatedBy: separators).filter { !$0.isEmpty }
         guard parts.count == 3, let day = Int(parts[0]), (1...31).contains(day) else { return value }
 
-        let months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
         let month: Int
         if let numeric = Int(parts[1]), (1...12).contains(numeric) {
             month = numeric
-        } else if let named = months.firstIndex(where: { parts[1].hasPrefix($0) }) {
-            month = named + 1
+        } else if let named = DocumentDate.monthNumber(parts[1]) {
+            // The same table the review pane reads and writes, so "is APR a
+            // month" has one answer in this app rather than two that can drift.
+            month = named
         } else {
             return value
         }

@@ -150,11 +150,6 @@ final class ModelTests: XCTestCase {
         XCTAssertTrue(result.isBlocking, "OCR debris must not reach a crew list")
     }
 
-    func testISORoundTrip() throws {
-        let date = try XCTUnwrap(CrewFieldValidator.isoDate("1984-12-16"))
-        XCTAssertEqual(CrewFieldValidator.iso8601String(date), "1984-12-16")
-    }
-
     // MARK: - Crew list projection
 
     /// Export reads the document's own fields, so a correction always lands on

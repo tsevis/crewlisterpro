@@ -169,8 +169,8 @@ struct RootView: View {
 
     private var peopleCommands: some View {
         CommandBar {
-            TripPicker(onNewTrip: { store.createTrip(); screen = .trip },
-                       onDeleteTrip: { pendingTripDeletion = store.selectedTrip })
+            TripStrip(onNewTrip: { store.createTrip(); screen = .trip },
+                      onDeleteTrip: { pendingTripDeletion = store.selectedTrip })
 
             Button { importing = true } label: {
                 Label("Import", systemImage: "doc.badge.plus")
@@ -214,8 +214,8 @@ struct RootView: View {
     // of how they differ.
     private var crewListCommands: some View {
         CommandBar {
-            TripPicker(onNewTrip: { store.createTrip(); screen = .trip },
-                       onDeleteTrip: { pendingTripDeletion = store.selectedTrip })
+            TripStrip(onNewTrip: { store.createTrip(); screen = .trip },
+                      onDeleteTrip: { pendingTripDeletion = store.selectedTrip })
         } trailing: {
             ExportButton()
         }
@@ -223,8 +223,8 @@ struct RootView: View {
 
     private var tripCommands: some View {
         CommandBar {
-            TripPicker(onNewTrip: { store.createTrip(); screen = .trip },
-                       onDeleteTrip: { pendingTripDeletion = store.selectedTrip })
+            TripStrip(onNewTrip: { store.createTrip(); screen = .trip },
+                      onDeleteTrip: { pendingTripDeletion = store.selectedTrip })
         } trailing: {
             Button { screen = .people } label: {
                 Label("People", systemImage: "person.2")
@@ -233,93 +233,6 @@ struct RootView: View {
             .disabled(store.selectedTripID == nil)
             .help("Import and review this trip's passports")
         }
-    }
-}
-
-// MARK: - Trip picker
-
-/// The trip, its readiness, and the two things you can do to it. Trip switching
-/// lost its column when the sidebar went; the count that column carried has to
-/// survive, because it is the one number that says which charter is behind.
-struct TripPicker: View {
-    @Environment(CrewStore.self) private var store
-    let onNewTrip: () -> Void
-    let onDeleteTrip: () -> Void
-
-    var body: some View {
-        Menu {
-            ForEach(store.activeTrips) { trip in
-                tripButton(trip)
-            }
-            // Archived charters keep their own submenu rather than vanishing.
-            // A trip the picker cannot reach is a trip whose passport scans can
-            // be neither restored nor erased, so the way back is always here.
-            if !store.archivedTrips.isEmpty {
-                Menu("Archived") {
-                    ForEach(store.archivedTrips) { trip in
-                        tripButton(trip)
-                    }
-                }
-            }
-            Divider()
-            Button("New Trip", action: onNewTrip)
-            if store.selectedTrip?.isArchived == true {
-                Button("Restore This Trip") {
-                    if let id = store.selectedTripID { store.restoreTrip(id) }
-                }
-            } else {
-                Button("Archive This Trip") {
-                    if let id = store.selectedTripID { store.archiveTrip(id) }
-                }
-                .disabled(store.selectedTripID == nil)
-            }
-            Button("Delete This Trip…", role: .destructive, action: onDeleteTrip)
-                .disabled(store.selectedTripID == nil)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "sailboat").foregroundStyle(Theme.accentText)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(store.selectedTrip.map(tripLabel) ?? "No trip")
-                        .font(Theme.Font.supportEmphasis)
-                        .foregroundStyle(Theme.ink)
-                        .lineLimit(1)
-                    if let trip = store.selectedTrip {
-                        Text(readinessLabel(trip))
-                            .font(Theme.Font.meta)
-                            .foregroundStyle(Theme.inkSecondary)
-                            .lineLimit(1)
-                    }
-                }
-            }
-            .frame(maxWidth: 210, alignment: .leading)
-        }
-        // `.menuStyle(.button)` deliberately: `.borderlessButton` renders the
-        // label but stops the menu taking clicks.
-        .menuStyle(.button)
-        .buttonStyle(.philonQuiet)
-        .fixedSize()
-        .help("Switch between trips")
-    }
-
-    @ViewBuilder
-    private func tripButton(_ trip: Trip) -> some View {
-        Button {
-            store.selectedTripID = trip.id
-            store.selectedDocumentID = store.data.documents.first { $0.tripID == trip.id }?.id
-        } label: {
-            Text("\(tripLabel(trip))  ·  \(readinessLabel(trip))")
-        }
-    }
-
-    func tripLabel(_ trip: Trip) -> String {
-        let boat = store.boat(for: trip)
-        return boat.map { $0.isComplete ? $0.name : "Untitled yacht" } ?? "Untitled yacht"
-    }
-
-    func readinessLabel(_ trip: Trip) -> String {
-        let documents = store.data.documents.filter { $0.tripID == trip.id }
-        guard !documents.isEmpty else { return "No documents" }
-        return "\(documents.filter { $0.canExport() }.count)/\(documents.count) cleared"
     }
 }
 

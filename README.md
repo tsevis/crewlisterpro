@@ -25,12 +25,18 @@ against the document image.**
 Three columns follow the operator's actual sequence — **choose a trip, pick a document,
 check it against its own image.**
 
-- **Trips** carry the yacht, the voyage dates and how many documents are cleared.
+- **Trips** are a horizontal strip of yachts across the command line — every charter and its
+  cleared-count readable at once, rather than one name with the rest behind a dropdown. A new
+  trip already runs Saturday to Saturday; moving the departure moves the return with it.
 - **Documents** show the status the *operator* has reached, not what a check digit guessed.
   A freshly imported passport reads "Awaiting review" even when its MRZ is perfect.
 - **Review** puts the decrypted document image beside its extracted fields. Every field is
   editable, every field is validated, and every field carries its own confirm toggle.
   Editing a value retracts its confirmation — a correction is re-checked like any other read.
+  Dates are shown the way the passport prints them (`20 OCT 1972`) and stored as ISO-8601;
+  either form can be typed. Below the fields sit the two facts that belong to the trip rather
+  than the document: whether this person is the **client** who signs the papers — one per
+  trip, skipper or passenger — and, for the skipper alone, an email address.
 
 The strip above the Import button always names the next thing standing between this trip and
 a crew list ("Name the yacht.", "GIULIA ROSSI: Nationality, Date of birth, Sex still
@@ -43,10 +49,19 @@ unconfirmed."), rather than only greying the export button out.
 Export writes two files, named for the yacht and the departure date so two charters leaving
 the same day cannot overwrite each other:
 
-- **PDF** — a boxed header (yacht, flag, port of registry, registration number), a SKIPPER
-  section and a PASSENGERS section, paginated so a large crew cannot fall off the page.
+- **PDF** — a boxed header (yacht, flag, port of registry, registration number) with the
+  skipper's email under it, a SKIPPER section, a PASSENGERS section and a signature line
+  naming the client, paginated so a large crew cannot fall off the page. Every date is
+  printed as `29 AUG 2026`, the form the documents themselves use.
 - **CSV** — UTF-8 with a BOM, CRLF line endings, and leading `=`/`+`/`-`/`@` neutralised so a
-  name read off a scanned document cannot execute in a spreadsheet.
+  name read off a scanned document cannot execute in a spreadsheet. Dates stay ISO-8601 here,
+  because this file is read by software; `skipper_email` and `is_client` are appended after
+  the existing columns, so anything already reading it by position is unaffected.
+
+A voyage date is the day the operator picked on their own calendar, and is written down as
+that day. It used to be formatted in UTC, which printed a departure chosen as 29/08 as 28/08
+for everyone east of Greenwich; `VoyageDate` and `DocumentDate` now keep the two senses of
+"date" apart.
 
 A sample of both is in [`docs/sample/`](docs/sample/), generated from fictional ICAO specimen
 documents.
@@ -148,7 +163,7 @@ CREWLISTR_FIXTURES=/path/to/documents CREWLISTR_OUTPUT=./TestOutput swift test -
 
 ## Testing
 
-126 tests, no unexpected failures. Eleven are opt-in and skip unless their environment
+409 tests, no unexpected failures. Eighteen are opt-in and skip unless their environment
 variable is set — they touch real identity documents or the live encrypted store.
 
 | Suite | Covers |
@@ -156,6 +171,9 @@ variable is set — they touch real identity documents or the live encrypted sto
 | `MRZTests` | Check digits, two-digit year resolution, name parsing, every rejection path |
 | `ModelTests` | The export gate, field validation, persistence shapes and schema versioning |
 | `ExportServiceTests` | CSV structure and injection safety, PDF pagination and content |
+| `ExportClientTests` | The client signature block, the skipper's email, and which file gets which date format |
+| `DateFormatTests` | Voyage days across time zones, the Saturday charter week, `20 OCT 1972` both ways |
+| `VoyageAndClientTests` | Picking dates, naming the client, and where the skipper's email lives |
 | `DocumentProcessorTests` | Rotate, crop and enhance |
 | `StoragePathTests` | The application-support path and SQLCipher open |
 | `SQLCipherTests` | That the database file contains no plaintext |
@@ -214,14 +232,17 @@ Sources/CrewListrProMac/
   ModelManager.swift     Local model download with integrity checking
   LlamaVisionRescuer.swift  Optional local VLM
   ExportService.swift    CSV and the printed crew list
+  DateFormats.swift      Voyage days vs. document dates, and the charter week
+  HeadlessExport.swift   The --export / --list command line
   UI/
-    AppShell.swift       App entry, the three-column shell, storage-failure view
-    TripSidebar.swift    Trips, readiness, delete
+    AppShell.swift       App entry, the window shell, storage-failure view
+    AppChrome.swift      Screen row, command line, panels and banners
+    TripStrip.swift      The horizontal strip of yachts, and what can be done to one
     DocumentColumn.swift Documents, review status, export readiness
-    ReviewDetail.swift   The field-by-field review pane
+    ReviewDetail.swift   The field-by-field review pane, the client and the skipper's email
     DocumentPreview.swift Decrypted image with zoom and rotate
-    TripInspector.swift  Yacht and voyage details
-    ExportSheet.swift    Crew-list preview, blockers and export
+    TripScreen.swift     Yacht, voyage dates and earlier versions
+    CrewListScreen.swift Crew-list preview, blockers and export
 ```
 
 ---

@@ -38,7 +38,7 @@ enum CrewField: String, CaseIterable, Identifiable, Codable, Sendable {
         case .fullName: "GIVEN NAMES SURNAME"
         case .documentNumber: "AB1234567"
         case .nationality: "UKRAINIAN"
-        case .birthDate, .expiryDate: "YYYY-MM-DD"
+        case .birthDate, .expiryDate: "20 OCT 1972"
         case .sex: "M or F"
         case .documentType: "passport"
         }
@@ -87,6 +87,31 @@ enum CrewField: String, CaseIterable, Identifiable, Codable, Sendable {
     ]
 
     var isRequiredForExport: Bool { Self.requiredForExport.contains(self) }
+
+    /// Fields holding a calendar date printed on the document.
+    var isDate: Bool { self == .birthDate || self == .expiryDate }
+
+    // MARK: - Storage and presentation
+    //
+    // A date is held as ISO-8601 — that is what the machine-readable zone
+    // gives, what validation checks and what the CSV carries — and shown as
+    // `20 OCT 1972`, which is what the page in front of the operator says.
+    // Both directions live here rather than in the review pane, so nothing that
+    // renders a field has to know which of the two it is looking at.
+
+    /// The stored value as the operator should see it.
+    func presented(_ stored: String) -> String {
+        isDate ? DocumentDate.display(stored) : stored
+    }
+
+    /// What to store for what the operator typed. A date that parses is stored
+    /// in the canonical form; one that does not is stored exactly as typed, so
+    /// validation objects to it rather than the field silently discarding it.
+    func stored(_ typed: String) -> String {
+        let trimmed = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isDate else { return trimmed }
+        return DocumentDate.stored(trimmed) ?? trimmed
+    }
 }
 
 // MARK: - Validation
@@ -110,6 +135,12 @@ enum FieldValidation: Equatable, Sendable {
 }
 
 enum CrewFieldValidator {
+    /// What to type when a date could not be read. Phrased as an example
+    /// rather than a pattern: the field shows and accepts `20 OCT 1972`, the
+    /// form the document itself is printed in, and "YYYY-MM-DD" would send the
+    /// operator looking for a shape that is no longer on screen.
+    static let dateAdvice = "Use a date like 20 OCT 1972."
+
     /// Dates are compared against a fixed reference rather than `Date.now` so a
     /// validation result is reproducible in tests and in a saved document.
     static func validate(_ field: CrewField, value: String, today: Date = .now) -> FieldValidation {
@@ -143,12 +174,12 @@ enum CrewFieldValidator {
         case .documentType:
             return .valid
         case .birthDate:
-            guard let date = isoDate(trimmed) else { return .invalid("Use YYYY-MM-DD.") }
+            guard let date = isoDate(trimmed) else { return .invalid(Self.dateAdvice) }
             if date > today { return .invalid("Birth date is in the future.") }
             if date < Date(timeIntervalSince1970: -3_155_760_000) { return .warning("Over 100 years ago — check the century.") }
             return .valid
         case .expiryDate:
-            guard let date = isoDate(trimmed) else { return .invalid("Use YYYY-MM-DD.") }
+            guard let date = isoDate(trimmed) else { return .invalid(Self.dateAdvice) }
             return date < today ? .warning("Document has expired.") : .valid
         }
     }
@@ -198,11 +229,31 @@ enum CrewFieldValidator {
         return formatter.date(from: value)
     }
 
-    static func iso8601String(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+}
+
+
+// MARK: - Contact details
+
+/// The skipper's email address — the one contact detail a crew list carries.
+///
+/// Its own validator rather than a `CrewField`, because it belongs to the
+/// person's assignment on this trip and not to the document that identifies
+/// them: it is not read off a passport, it is not confirmed against an image,
+/// and it never blocks the export. A crew list with a mistyped address is still
+/// a valid crew list, so every finding here is a warning.
+enum ContactValidator {
+    static func validate(email: String) -> FieldValidation {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Optional. A skipper who did not give an address is not an error.
+        guard !trimmed.isEmpty else { return .valid }
+        guard !trimmed.contains(" ") else { return .warning("An email address cannot contain a space.") }
+        // Deliberately shallow. The full grammar of an address is famously
+        // unmatchable, and an over-strict rule that rejects a working address
+        // is worse than a loose one that accepts a typo the operator can see.
+        let shape = #"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"#
+        guard trimmed.range(of: shape, options: .regularExpression) != nil else {
+            return .warning("Doesn't look like an email address — check it.")
+        }
+        return .valid
     }
 }

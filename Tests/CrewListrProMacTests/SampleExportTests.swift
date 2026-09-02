@@ -16,9 +16,12 @@ final class SampleExportTests: XCTestCase {
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
 
         let boat = Boat(name: "S/Y ELPIDA", flag: "GRC", registrationPort: "PIRAEUS", registrationNumber: "GR-1187-P")
+        // Local calendar components, like the picker's own output — an epoch
+        // instant lands on the previous day west of Greenwich.
+        let calendar = Calendar.current
         let trip = Trip(boatID: boat.id,
-                        departureDate: Date(timeIntervalSince1970: 1_756_684_800),
-                        returnDate: Date(timeIntervalSince1970: 1_757_289_600))
+                        departureDate: calendar.date(from: DateComponents(year: 2025, month: 9, day: 1))!,
+                        returnDate: calendar.date(from: DateComponents(year: 2025, month: 9, day: 8))!)
 
         let rows = SpecimenGenerator.demoCrew.enumerated().map { index, specimen -> CrewListRow in
             var document = CrewDocument(tripID: trip.id, personID: UUID(),
@@ -28,12 +31,18 @@ final class SampleExportTests: XCTestCase {
             for field in CrewField.allCases {
                 document[field] = parsed[field.rawValue] ?? ""
             }
-            return CrewListRow(document: document, role: index == 0 ? .skipper : .passenger)
+            // The second specimen is the client, deliberately: the person who
+            // signs is often a passenger rather than the skipper, and the
+            // sample should show that rather than the easy case.
+            return CrewListRow(document: document,
+                               role: index == 0 ? .skipper : .passenger,
+                               isClient: index == 1)
         }
 
+        let email = "skipper@example.com"
         let base = ExportService.fileNameStem(boat: boat, trip: trip)
-        try ExportService.exportCSV(to: output.appending(path: "\(base).csv"), trip: trip, boat: boat, rows: rows)
-        try ExportService.exportPDF(to: output.appending(path: "\(base).pdf"), trip: trip, boat: boat, rows: rows)
+        try ExportService.exportCSV(to: output.appending(path: "\(base).csv"), trip: trip, boat: boat, rows: rows, skipperEmail: email)
+        try ExportService.exportPDF(to: output.appending(path: "\(base).pdf"), trip: trip, boat: boat, rows: rows, skipperEmail: email)
 
         for row in rows {
             XCTAssertFalse(row.fullName.isEmpty)

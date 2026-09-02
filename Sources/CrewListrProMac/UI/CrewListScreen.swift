@@ -36,7 +36,7 @@ struct CrewListScreen: View {
     private var heading: String {
         guard let boat = store.selectedBoat, let trip = store.selectedTrip else { return "No trip selected" }
         let name = boat.name.isEmpty ? "Untitled yacht" : boat.name
-        return "\(name) · \(boat.flag.isEmpty ? "no flag" : boat.flag) · \(CrewFieldValidator.iso8601String(trip.departureDate)) → \(CrewFieldValidator.iso8601String(trip.returnDate))"
+        return "\(name) · \(boat.flag.isEmpty ? "no flag" : boat.flag) · \(VoyageDate.printed(trip.departureDate)) → \(VoyageDate.printed(trip.returnDate))"
     }
 
     /// `.batch-metrics`
@@ -47,6 +47,11 @@ struct CrewListScreen: View {
                 value: "\(rows.filter { $0.role == .skipper }.count)",
                 label: "Skipper",
                 tint: rows.contains { $0.role == .skipper } ? Theme.accentText : Theme.caution
+            )
+            PhilonMetric(
+                value: rows.contains(where: \.isClient) ? "1" : "—",
+                label: "Client",
+                tint: rows.contains(where: \.isClient) ? Theme.accentText : Theme.inkTertiary
             )
             PhilonMetric(value: "2", label: "Files written (CSV, PDF)")
         }
@@ -62,10 +67,19 @@ struct CrewListScreen: View {
                     .foregroundStyle(row.role == .skipper ? Theme.accentText : Theme.inkSecondary)
             }
             .width(90)
+            // Its own column rather than a suffix on the role: the client is a
+            // second fact about the person, and a passenger who signs reads as
+            // neither "Passenger" nor "Client" alone.
+            TableColumn("Client") { row in
+                Text(row.isClient ? "Signs" : "")
+                    .font(Theme.Font.supportEmphasis)
+                    .foregroundStyle(Theme.accentText)
+            }
+            .width(56)
             TableColumn("Full name") { Text($0.fullName).font(Theme.Font.support).foregroundStyle(Theme.ink) }
             TableColumn("Passport no.") { Text($0.documentNumber).font(Theme.Font.monoMeta) }.width(120)
             TableColumn("Nationality") { Text($0.nationality).font(Theme.Font.support) }.width(120)
-            TableColumn("Birthday") { Text($0.birthDate).font(Theme.Font.monoMeta) }.width(104)
+            TableColumn("Birthday") { Text($0.printedBirthDate).font(Theme.Font.monoMeta) }.width(104)
             TableColumn("Sex") { Text($0.sex).font(Theme.Font.support) }.width(44)
         })
         // Without this the inset style stripes every row slot in the panel,

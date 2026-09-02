@@ -37,7 +37,7 @@ final class LiveStoreReview: XCTestCase {
         }
         for trip in empty {
             let boat = data.boats.first { $0.id == trip.boatID }
-            print("· removing \(boat?.name ?? "Untitled yacht") (\(CrewFieldValidator.iso8601String(trip.departureDate)))")
+            print("· removing \(boat?.name ?? "Untitled yacht") (\(VoyageDate.iso(trip.departureDate)))")
             data.assignments.removeAll { $0.tripID == trip.id }
             data.trips.removeAll { $0.id == trip.id }
             // Keep a boat that another trip still uses.
@@ -145,7 +145,7 @@ final class LiveStoreReview: XCTestCase {
         }
         if let boat = reloaded.boats.first, let trip = reloaded.trips.first {
             print("  yacht: \(boat.name) · \(boat.flag) · \(boat.registrationPort) · \(boat.registrationNumber)")
-            print("  dates: \(CrewFieldValidator.iso8601String(trip.departureDate)) → \(CrewFieldValidator.iso8601String(trip.returnDate))")
+            print("  dates: \(VoyageDate.iso(trip.departureDate)) → \(VoyageDate.iso(trip.returnDate))")
         }
         print("-------------------------------\n")
 
