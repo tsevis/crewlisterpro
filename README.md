@@ -195,7 +195,7 @@ CREWLISTR_FIXTURES=/path/to/documents CREWLISTR_OUTPUT=./TestOutput swift test -
 
 ## Testing
 
-453 tests, no unexpected failures. Eighteen are opt-in and skip unless their environment
+458 tests, no unexpected failures. Nineteen are opt-in and skip unless their environment
 variable is set — they touch real identity documents or the live encrypted store.
 
 | Suite | Covers |
@@ -207,6 +207,7 @@ variable is set — they touch real identity documents or the live encrypted sto
 | `DateFormatTests` | Voyage days across time zones, the Saturday charter week, `20 OCT 1972` both ways |
 | `FleetTests` | Keeping, retiring and deleting a yacht, and which one a new trip charters |
 | `SettingsTests` | The defaults, the guards on them, and what each one changes |
+| `ScreenshotTests` *(opt-in)* | Renders every screen to a PNG so a layout can be looked at |
 | `VoyageAndClientTests` | Picking dates, naming the client, and where the skipper's email lives |
 | `DocumentProcessorTests` | Rotate, crop and enhance |
 | `StoragePathTests` | The application-support path and SQLCipher open |

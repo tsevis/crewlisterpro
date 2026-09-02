@@ -95,8 +95,12 @@ struct SettingsScreen: View {
                     Text(settings.charterLengthDays == 1 ? "1 day" : "\(settings.charterLengthDays) days")
                         .font(Theme.Font.body.monospacedDigit())
                         .foregroundStyle(Theme.ink)
+                        // A Stepper centres its label in whatever width it is
+                        // given, which left this row's value floating while
+                        // every row above it started hard against the label.
+                        .frame(width: 64, alignment: .leading)
                 }
-                .frame(maxWidth: 180)
+                .fixedSize()
             }
 
             FormRule()
@@ -224,11 +228,14 @@ struct SettingsScreen: View {
         }
     }
 
+    /// The trip in hand and its own yacht, so the example is a file this
+    /// operator could actually be about to write — not one yacht's name beside
+    /// another's departure date.
     private var exampleFileName: String {
-        let boat = store.fleet.first ?? Boat(name: "S/Y ELPIDA")
-        let trip = store.selectedTrip ?? Trip(boatID: boat.id, departureDate: .now, returnDate: .now)
-        let stem = ExportService.fileNameStem(boat: boat, trip: trip, prefix: settings.fileNamePrefix)
-        return "\(stem).pdf"
+        let trip = store.selectedTrip
+        let boat = trip.flatMap(store.boat(for:)) ?? store.fleet.first ?? Boat(name: "S/Y ELPIDA")
+        let voyage = trip ?? Trip(boatID: boat.id, departureDate: .now, returnDate: .now)
+        return "\(ExportService.fileNameStem(boat: boat, trip: voyage, prefix: settings.fileNamePrefix)).pdf"
     }
 
     private var folderLabel: String {
@@ -285,8 +292,9 @@ struct SettingsScreen: View {
                     Text("Keep \(settings.versionsKept)")
                         .font(Theme.Font.body.monospacedDigit())
                         .foregroundStyle(Theme.ink)
+                        .frame(width: 64, alignment: .leading)
                 }
-                .frame(maxWidth: 180)
+                .fixedSize()
 
                 Text(versionsHeld)
                     .font(Theme.Font.meta)

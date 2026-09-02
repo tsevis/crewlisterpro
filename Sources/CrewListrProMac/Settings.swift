@@ -96,7 +96,16 @@ struct AppSettings: Codable, Hashable, Sendable {
         return squeezed.isEmpty ? defaultFileNamePrefix : squeezed
     }
 
-    /// What an export will write, named the same way wherever it is mentioned.
+    /// What an export will write, in as few words as a button can carry.
+    var exportFilesDescription: String {
+        switch (writesCSV, writesPDF) {
+        case (true, true): "CSV and PDF"
+        case (true, false): "CSV"
+        default: "PDF"
+        }
+    }
+
+    /// The same fact in a sentence, for a help string or a panel's message.
     var exportDescription: String {
         switch (writesCSV, writesPDF) {
         case (true, true): "the crew list CSV and PDF"

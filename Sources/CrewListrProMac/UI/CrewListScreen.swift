@@ -117,7 +117,9 @@ struct ExportButton: View {
     /// Names what will be written and where, so the operator is never guessing
     /// which of the two it is about to do.
     private var exportLabel: String {
-        guard let folder = store.standingExportFolder else { return "Export \(store.settings.exportDescription)…" }
+        guard let folder = store.standingExportFolder else {
+            return "Export \(store.settings.exportFilesDescription)…"
+        }
         return "Export to \(folder.lastPathComponent)"
     }
 

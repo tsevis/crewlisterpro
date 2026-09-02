@@ -130,6 +130,26 @@ final class ExportClientTests: XCTestCase {
 
     // MARK: - The skipper's email
 
+    /// The blank case, which is what most trips look like before anyone fills
+    /// these in: no client named and no address given. The block still has to
+    /// be on the form and the gap under the header boxes has to stay the same,
+    /// or a port official is handed a form that is a different shape each time.
+    func testThePDFWithNoClientAndNoEmailIsStillAWholeForm() throws {
+        let url = directory.appending(path: "bare.pdf")
+        try ExportService.exportPDF(to: url, trip: trip, boat: boat,
+                                    rows: [row("ANNA ERIKSSON", role: .skipper), row("YUKI NAKAMURA", number: "Y2")],
+                                    skipperEmail: "")
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        let text = (0..<document.pageCount).compactMap { document.page(at: $0)?.string }.joined(separator: "\n")
+
+        XCTAssertTrue(text.contains("SKIPPER"), text)
+        XCTAssertTrue(text.contains("PASSENGERS"), text)
+        XCTAssertTrue(text.contains("CLIENT"), "the signature block must be on every form")
+        XCTAssertTrue(text.contains("SIGNATURE"))
+        XCTAssertFalse(text.contains("SKIPPER EMAIL"), "no address was given, so no label for one")
+        XCTAssertEqual(document.pageCount, 1)
+    }
+
     func testThePDFPrintsTheSkippersEmail() throws {
         let text = try pdfText([row("ANNA ERIKSSON", role: .skipper)], skipperEmail: "anna@example.com", name: "email.pdf")
         XCTAssertTrue(text.contains("anna@example.com"), "skipper email missing:\n\(text)")

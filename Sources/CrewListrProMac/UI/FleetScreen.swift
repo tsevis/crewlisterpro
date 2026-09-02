@@ -20,6 +20,20 @@ struct FleetScreen: View {
 
     var body: some View {
         DocumentGrid {
+            // A fleet with nothing in it does not need two panels: an empty
+            // list beside an empty detail pane is the same emptiness twice,
+            // with "No yachts yet" written on both halves of it.
+            if store.data.boats.isEmpty {
+                PhilonEmptyState(
+                    symbol: "sailboat",
+                    title: "No yachts yet",
+                    message: "Add every yacht you charter once. A trip then picks one, and its registration details are printed on the crew list without being retyped."
+                ) {
+                    Button("Add a Yacht") { add() }
+                        .buttonStyle(.philonPrimary)
+                }
+                .frame(maxWidth: .infinity)
+            } else {
             list
                 .frame(minWidth: 250, idealWidth: 290, maxWidth: 330)
 
@@ -34,17 +48,11 @@ struct FleetScreen: View {
             } else {
                 PhilonEmptyState(
                     symbol: "sailboat",
-                    title: store.data.boats.isEmpty ? "No yachts yet" : "Select a yacht",
-                    message: store.data.boats.isEmpty
-                        ? "Add every yacht you charter once. A trip then picks one, and its registration details are printed on the crew list without being retyped."
-                        : "Choose a yacht on the left to check or correct what is printed on its crew lists."
-                ) {
-                    if store.data.boats.isEmpty {
-                        Button("Add a Yacht") { add() }
-                            .buttonStyle(.philonPrimary)
-                    }
-                }
+                    title: "Select a yacht",
+                    message: "Choose a yacht on the left to check or correct what is printed on its crew lists."
+                )
                 .frame(maxWidth: .infinity)
+            }
             }
         }
         .onAppear { if selection == nil { selection = store.fleet.first?.id } }
@@ -88,11 +96,9 @@ struct FleetScreen: View {
 
     private var list: some View {
         VStack(spacing: 0) {
-            PanelHeader(eyebrow: "Fleet", title: title) {
-                if !store.fleet.isEmpty {
-                    CountBadge(count: store.fleet.count, tint: Theme.accentText)
-                }
-            }
+            // No count badge: the title already reads "2 yachts", and a badge
+            // beside it saying 2 is the same fact twice.
+            PanelHeader(eyebrow: "Fleet", title: title)
 
             List(selection: $selection) {
                 ForEach(store.fleet) { row($0) }

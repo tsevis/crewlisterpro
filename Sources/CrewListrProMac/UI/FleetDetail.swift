@@ -139,12 +139,12 @@ struct FleetDetail: View {
 
     private var useForNewTrips: some View {
         FormSection(title: "New trips") {
-            FormRow(label: "Use this yacht", labelWidth: 118) {
+            FormRow(label: "Default", labelWidth: 118) {
                 Toggle(isOn: Binding(
                     get: { isDefault },
                     set: { setDefault($0) }
                 )) {
-                    Text(isDefault ? "New trips are for this yacht" : "New trips ask, or use the only yacht in the fleet")
+                    Text("New trips are for this yacht")
                         .font(Theme.Font.support)
                         .foregroundStyle(Theme.ink)
                 }
@@ -152,7 +152,12 @@ struct FleetDetail: View {
                 .disabled(boat.isRetired)
             }
             FormRule()
-            FormCaption("A retired yacht is never chosen for a new trip, and retiring the default clears this.")
+            // Says what actually happens rather than what the checkbox is
+            // called. Without a default a new trip takes the yacht last
+            // chartered, which the old wording did not mention at all.
+            FormCaption(isDefault
+                ? "Every new trip is for this yacht until another is made the default. A retired yacht is never chosen, and retiring the default clears it."
+                : "With no default set, a new trip is for the yacht last chartered. A retired yacht is never chosen.")
         }
     }
 

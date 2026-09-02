@@ -19,14 +19,18 @@ struct TripStrip: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            // The menu comes first and stays put. It was after the strip, and
+            // the strip expands to fill the command line — so on a window with
+            // two trips the menu sat marooned against the Import button with a
+            // hand's width of nothing between it and the chips it belongs to.
+            actions
+
             if store.data.trips.isEmpty {
                 Button("New Trip", systemImage: "plus") { onNewTrip(nil) }
                     .buttonStyle(.philonSecondary)
             } else {
                 strip
             }
-
-            actions
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

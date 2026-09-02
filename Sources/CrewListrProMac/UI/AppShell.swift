@@ -207,10 +207,11 @@ struct RootView: View {
     }
 
     /// Nothing to do on Settings but change them, and each one is its own
-    /// control. The line still exists so the window does not jump.
+    /// control. The line still exists so the window does not jump between
+    /// screens — and it carries the one thing the panel header does not say.
     private var settingsCommands: some View {
         CommandBar {
-            Text("Defaults for this Mac. Nothing here leaves it.")
+            Label("Every setting applies to this Mac. Nothing here leaves it.", systemImage: "lock.shield")
                 .font(Theme.Font.meta)
                 .foregroundStyle(Theme.inkTertiary)
         } trailing: {
