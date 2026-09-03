@@ -25,8 +25,9 @@ enum MRZ {
 
             // Names come from the preceding line when it is recognisable. When
             // it is not, everything line 2 knows is still worth keeping.
+            let state = fields["nationality"]
             let candidates = [index > 0 ? lines[index - 1] : nil, index + 1 < lines.count ? lines[index + 1] : nil]
-            if let name = candidates.compactMap({ $0.flatMap(Self.names) }).first {
+            if let name = candidates.compactMap({ $0.flatMap { Self.names($0, issuedBy: state) } }).first {
                 fields["full_name"] = name
             }
             fields["document_type"] = "passport"
@@ -77,7 +78,7 @@ enum MRZ {
     /// The name field ends at its first run of two or more fillers; anything
     /// after that is padding, and on a photographed passport it is often
     /// security print that OCR mistook for letters.
-    static func names(_ line: String) -> String? {
+    static func names(_ line: String, issuedBy state: String? = nil) -> String? {
         // Tolerate a misread document-class or issuing-state character: only the
         // shape "<letter/filler><3 chars><name>" has to survive.
         guard line.count >= 10 else { return nil }
@@ -85,7 +86,7 @@ enum MRZ {
         // camera turned security print into text, and every character on the
         // line is then suspect — better no name than an invented one.
         guard !line.contains(where: \.isNumber) else { return nil }
-        let body = String(line.dropFirst(5))
+        let body = String(line.dropFirst(prefixLength(of: line, issuedBy: state)))
         let parts = body.components(separatedBy: "<<")
         guard parts.count >= 2 else { return nil }
 
@@ -93,6 +94,68 @@ enum MRZ {
         let given = tokens(parts[1]).joined(separator: " ")
         guard !surname.isEmpty, !given.isEmpty else { return nil }
         return "\(given) \(surname)"
+    }
+
+    /// How much of line 1 comes before the name.
+    ///
+    /// By the standard it is five characters: a document class, a filler, and
+    /// the three-letter issuing state. Dropping five unconditionally is what
+    /// the parser used to do, and on a photograph where the recogniser missed
+    /// the `P<HUN` altogether it ate the first five letters of the surname
+    /// instead — measured on a real passport, where it turned an eight-letter
+    /// surname into three.
+    ///
+    /// So the prefix is identified rather than assumed, using the issuing state
+    /// line 2 has already proved with a check digit. Nothing is dropped when
+    /// nothing that looks like a prefix is there.
+    static func prefixLength(of line: String, issuedBy state: String?) -> Int {
+        let characters = Array(line)
+        if let state, state.count == 3, characters.count > 5 {
+            if String(characters[2..<5]) == state { return 5 }
+            if String(characters[0..<3]) == state { return 3 }
+        }
+        // No state to check against: fall back to the shape alone — a letter,
+        // a filler, then three more letters.
+        if characters.count > 5, characters[1] == "<", characters[0].isLetter,
+           characters[2...4].allSatisfy(\.isLetter) {
+            return 5
+        }
+        return 0
+    }
+
+    /// The best name among several readings of the same line.
+    ///
+    /// Used only after the ordinary path has failed, and only over strings the
+    /// recogniser itself proposed. A reading has to earn its place: it must
+    /// hold no digits, since line 1 cannot legally contain one; it must carry
+    /// the `<<` that separates surname from given names; and it is preferred
+    /// when it is the full 44 characters and when it opens with the issuing
+    /// state that line 2 has already proved.
+    ///
+    /// Ties are broken towards the longer reading, because the failure being
+    /// repaired is a line the camera cut short.
+    static func bestName(among readings: [String], issuedBy state: String) -> String? {
+        let cleaned = readings
+            .map { $0.uppercased().filter { alphabet.contains($0) } }
+            .filter { $0.count >= 20 && $0.contains("<<") && !$0.contains(where: \.isNumber) }
+
+        let ranked = cleaned.sorted { lhs, rhs in
+            let left = (confidence(of: lhs, issuedBy: state), lhs.count)
+            let right = (confidence(of: rhs, issuedBy: state), rhs.count)
+            return left > right
+        }
+        return ranked.lazy.compactMap { names($0, issuedBy: state) }.first
+    }
+
+    /// How much a reading looks like the first line of a TD3 zone.
+    private static func confidence(of line: String, issuedBy state: String) -> Int {
+        var score = 0
+        if prefixLength(of: line, issuedBy: state) == 5 { score += 2 }
+        if line.count == 44 { score += 1 }
+        // The filler run that pads the line out to 44 is the most recognisable
+        // thing on it, and its absence usually means the reading stopped early.
+        if line.hasSuffix("<<") { score += 1 }
+        return score
     }
 
     private static func tokens(_ value: String) -> [String] {
