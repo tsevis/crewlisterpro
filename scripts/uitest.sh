@@ -84,14 +84,30 @@ LOG="${TMPDIR:-/tmp}/crewlistr-uitest.log"
 
 # An app left running by an interrupted run is not replaced by the next one —
 # macOS activates the existing instance instead, still holding the old launch
-# environment and the old store. Clear it out before starting.
-pkill -f "CrewListr Pro UITest.app/Contents/MacOS" 2>/dev/null || true
+# environment and the old store.
+#
+# Cleared on the way out as well as on the way in, and on interrupt too. Several
+# runs here ended leaving an instance behind, and an orphan of this app is not
+# an idle process: it holds a window and the focus that goes with it, which is
+# the last thing to come back to on a machine you walked away from.
+cleanup() {
+  pkill -f "CrewListr Pro UITest.app/Contents/MacOS" 2>/dev/null || true
+  pkill -f "CrewListrProUITests-Runner" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+cleanup
 
+# Time limits, because this is meant to be run unattended. Without them a test
+# that hangs holds the desktop for as long as it takes someone to come back and
+# notice; with them the run gives up and the trap above puts the screen back.
 xcodebuild test \
   -project CrewListrPro.xcodeproj \
   -scheme CrewListrPro \
   -destination 'platform=macOS' \
   -derivedDataPath .build/xcode \
+  -test-timeouts-enabled YES \
+  -default-test-execution-time-allowance 120 \
+  -maximum-test-execution-time-allowance 300 \
   "$@" > "$LOG" 2>&1 || true
 
 # The whole log is kept — a UI-test failure is usually explained by the step
