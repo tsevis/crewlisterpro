@@ -2,7 +2,7 @@
 
 <img src="docs/icon-masked.png" alt="CrewListr Pro" width="128">
 
-**Offline crew-list preparation for charter yachts.** Version 0.1.8 · macOS 15+ · Apple Silicon
+**Offline crew-list preparation for charter yachts.** Version 0.1.11 · macOS 15+ · Apple Silicon
 
 CrewListr Pro turns photographed or scanned identity documents into the crew list a port
 authority expects. Extraction runs entirely on this Mac using Vision OCR and ICAO 9303
@@ -19,6 +19,8 @@ against the document image.**
 ---
 
 ## The fleet
+
+![The fleet](docs/screenshots/02-fleet.png)
 
 Every yacht you charter, described once. Name, flag, port of registry and
 registration number are facts about the vessel, not about this August's booking —
@@ -37,6 +39,8 @@ the wrong registration number.
   it is used without asking; set a default in Settings when there are several.
 
 ## Settings
+
+![Settings](docs/screenshots/04-settings.png)
 
 Defaults for this Mac, grouped by the moment each one applies: when a trip is
 made (charter start day and length, which yacht), when a yacht is added (flag and
@@ -97,6 +101,17 @@ for everyone east of Greenwich; `VoyageDate` and `DocumentDate` now keep the two
 
 A sample of both is in [`docs/sample/`](docs/sample/), generated from fictional ICAO specimen
 documents.
+
+Every screenshot above is rendered by `ScreenshotTests` from that same fictional fleet, so no
+real passport, name or registration number appears anywhere in this repository. The middle
+panel of the review shot is empty for the same reason: the sample crew carry extracted fields
+but no scan, and rendering one would mean putting somebody's passport in a public repository.
+
+Regenerate them rather than recapturing by hand:
+
+```bash
+CREWLISTR_SCREENSHOT_OUT=/tmp/shots swift test --filter ScreenshotTests
+```
 
 ---
 
