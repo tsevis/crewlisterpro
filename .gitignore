@@ -4,3 +4,8 @@ TestOutput/
 .DS_Store
 *.xcuserstate
 .swiftpm/
+
+# Generated from project.yml by scripts/uitest.sh. The Xcode project exists only
+# to host the XCUITest bundle a Swift package cannot; committing it would mean
+# keeping a second project file in step with Package.swift by hand.
+CrewListrPro.xcodeproj/

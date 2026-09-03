@@ -20,10 +20,15 @@ final class ExportServiceTests: XCTestCase {
 
     private let boat = Boat(name: "S/Y ELPIDA", flag: "GRC", registrationPort: "PIRAEUS", registrationNumber: "GR-1187-P")
 
+    /// Built from local calendar components rather than from an epoch offset.
+    /// A voyage date is a day on the operator's calendar, so the fixture has to
+    /// be the same kind of thing the picker hands the store — an instant fixed
+    /// in UTC lands on the previous day for anyone west of Greenwich.
     private var trip: Trip {
-        Trip(boatID: boat.id,
-             departureDate: Date(timeIntervalSince1970: 1_756_684_800),   // 2025-09-01
-             returnDate: Date(timeIntervalSince1970: 1_757_289_600))      // 2025-09-08
+        let calendar = Calendar.current
+        return Trip(boatID: boat.id,
+                    departureDate: calendar.date(from: DateComponents(year: 2025, month: 9, day: 1))!,
+                    returnDate: calendar.date(from: DateComponents(year: 2025, month: 9, day: 8))!)
     }
 
     private func row(_ name: String, number: String = "W1357924D", nationality: String = "UKRAINIAN",
@@ -180,10 +185,12 @@ final class ExportServiceTests: XCTestCase {
         XCTAssertTrue(text.contains("S/Y ELPIDA"), "yacht name missing")
     }
 
+    /// Printed the way the passport dates beside them are printed. The CSV
+    /// keeps the ISO form — see `ExportClientTests`.
     func testPDFIncludesTheVoyageDates() throws {
         let text = try pdfText([row("A", role: .skipper)], name: "dates.pdf")
-        XCTAssertTrue(text.contains("2025-09-01"), text)
-        XCTAssertTrue(text.contains("2025-09-08"), text)
+        XCTAssertTrue(text.contains("01 SEP 2025"), text)
+        XCTAssertTrue(text.contains("08 SEP 2025"), text)
     }
 
     func testPDFSeparatesSkipperFromPassengers() throws {

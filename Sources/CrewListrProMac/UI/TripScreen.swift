@@ -1,16 +1,24 @@
 import SwiftUI
 
-/// Yacht and voyage details. `Boat.flag`, `registrationPort` and
-/// `registrationNumber` existed in the model but had no way in, so every crew
-/// list printed "NEW YACHT" with three blank header boxes.
+/// Which yacht, and when.
 ///
-/// A screen rather than a sheet, and so it saves as you type rather than
+/// The yacht's own details moved to the Fleet, where a vessel is described once
+/// and reused: a registration number is a fact about the boat, not about this
+/// August's charter, and four fields retyped per trip is four chances a season
+/// to send a port authority the wrong one. What is left here is the pair of
+/// decisions that really do belong to a charter — which yacht it is for, and
+/// the dates it sails.
+///
+/// A screen rather than a sheet, and so it saves as you go rather than
 /// collecting an edit behind Cancel and Save. A modal asks "are you sure";
 /// a screen just holds what is true.
 struct TripScreen: View {
     @Environment(CrewStore.self) private var store
 
-    @State private var boat = Boat(name: "")
+    /// Opens this yacht in the Fleet. The four printed values are editable in
+    /// exactly one place, and this is the way there from a charter.
+    let onEditYacht: (UUID) -> Void
+
     @State private var trip: Trip?
     @State private var loadedTripID: Trip.ID?
     @State private var pendingRestore: SecureStore.Backup?
@@ -45,36 +53,32 @@ struct TripScreen: View {
             VStack(spacing: 0) {
                 PanelHeader(eyebrow: "Trip details", title: "Yacht and voyage")
 
+                if store.selectedTripID == nil {
+                    PhilonEmptyState(
+                        symbol: "calendar.badge.plus",
+                        title: "No trip selected",
+                        message: "Pick a yacht from the strip above, or start a charter from the Fleet."
+                    )
+                } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        section("Yacht") {
-                            field("Name", placeholder: "S/Y ELPIDA", text: $boat.name)
-                            rule
-                            field("Flag", placeholder: "GRC", text: $boat.flag)
-                            rule
-                            field("Port of registry", placeholder: "PIRAEUS", text: $boat.registrationPort)
-                            rule
-                            field("Registration no.", placeholder: "GR-1187-P", text: $boat.registrationNumber)
-                        }
+                        yacht
 
                         if let current = trip {
-                            section("Voyage") {
+                            FormSection(title: "Voyage") {
                                 datePicker("Departure", selection: Binding(
                                     get: { current.departureDate },
-                                    set: { trip?.departureDate = $0; save() }
+                                    set: { pickDeparture($0) }
                                 ), range: nil)
-                                rule
+                                FormRule()
                                 datePicker("Return", selection: Binding(
                                     get: { current.returnDate },
-                                    set: { trip?.returnDate = $0; save() }
+                                    set: { pickReturn($0) }
                                 ), range: current.departureDate...)
+                                FormRule()
+                                FormCaption("New trips already run \(charterRhythm). Moving the departure moves the return with it and keeps the charter the same length; pick a return date to override that.")
                             }
                         }
-
-                        PhilonNote(
-                            kind: .verified,
-                            message: "These four values are printed in the header boxes of the crew list a port authority receives."
-                        )
 
                         snapshots
                     }
@@ -86,6 +90,7 @@ struct TripScreen: View {
                     .padding(.bottom, 16)
                 }
                 .contentMargins(.bottom, MakersMark.reservedHeight, for: .scrollContent)
+                }
             }
             .frame(maxWidth: .infinity)
         }
@@ -98,14 +103,18 @@ struct TripScreen: View {
     private func load() {
         guard loadedTripID != store.selectedTripID else { return }
         loadedTripID = store.selectedTripID
-        boat = store.selectedBoat ?? Boat(name: "")
         trip = store.selectedTrip
-        if boat.name == Boat.placeholderName { boat.name = "" }
     }
 
-    /// Normalising on every keystroke would fight the field — uppercasing a
-    /// flag as it is typed moves the caret. The value is stored as typed and
-    /// squared up when the field gives up focus.
+    private var charterRhythm: String {
+        let day = AppSettings.weekdayName(store.settings.charterStartWeekday)
+        let days = store.settings.charterLengthDays
+        return days == 7 ? "\(day) to \(day)" : "\(days) days from a \(day)"
+    }
+
+    /// Takes a checkpoint, and says what happened. A snapshot is skipped when
+    /// nothing has changed, and a button that silently does nothing reads as
+    /// broken to the person who pressed it precisely because they were worried.
     private func saveAVersion() {
         Task {
             let written = await store.takeSnapshot()
@@ -122,19 +131,88 @@ struct TripScreen: View {
         }
     }
 
-    /// Saves as you type. `CrewStore.updateBoat` refuses a blank name, so an
-    /// emptied field cannot overwrite a real one on its way past.
-    private func save() {
-        store.updateBoat(boat)
-        if let trip { store.updateTrip(trip) }
+    /// Both go through the store rather than mutating the local copy, because
+    /// the store is where the day is normalised and where the return is carried
+    /// along — and the local copy is then re-read so the pickers show what was
+    /// actually stored rather than what was asked for.
+    private func pickDeparture(_ date: Date) {
+        guard let id = trip?.id else { return }
+        store.setDepartureDate(date, onTripWith: id)
+        trip = store.data.trips.first { $0.id == id }
     }
 
-    private func normaliseAndSave() {
-        boat.name = boat.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        boat.flag = boat.flag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        boat.registrationPort = boat.registrationPort.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        boat.registrationNumber = boat.registrationNumber.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        save()
+    private func pickReturn(_ date: Date) {
+        guard let id = trip?.id else { return }
+        store.setReturnDate(date, onTripWith: id)
+        trip = store.data.trips.first { $0.id == id }
+    }
+
+    // MARK: - The yacht
+
+    /// Which yacht this charter is for, and a plain reading of what its four
+    /// values will print. Read-only on purpose: they are edited in the Fleet,
+    /// where changing them changes the vessel rather than this one booking.
+    private var yacht: some View {
+        FormSection(title: "Yacht") {
+            FormRow(label: "Yacht") {
+                Picker("Yacht", selection: Binding(
+                    get: { trip?.boatID },
+                    set: { pickYacht($0) }
+                )) {
+                    ForEach(store.fleet) { boat in
+                        Text(boat.isComplete ? boat.name : "Untitled yacht").tag(Optional(boat.id))
+                    }
+                    // A retired yacht is not offered, but a charter already made
+                    // for one has to keep saying which yacht it was.
+                    if let current = store.selectedBoat, current.isRetired {
+                        Divider()
+                        Text("\(current.name) (retired)").tag(Optional(current.id))
+                    }
+                }
+                .labelsHidden()
+                .font(Theme.Font.body)
+                .frame(maxWidth: 260)
+
+                if let boatID = trip?.boatID {
+                    Button("Edit in Fleet") { onEditYacht(boatID) }
+                        .buttonStyle(.philonQuiet)
+                        .font(Theme.Font.meta)
+                }
+            }
+
+            FormRule()
+
+            FormRow(label: "Prints as") {
+                Text(printedHeader)
+                    .font(Theme.Font.support)
+                    .foregroundStyle(store.selectedBoat?.isComplete == true ? Theme.ink : Theme.inkTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            FormRule()
+
+            FormCaption("These four values are printed in the header boxes of the crew list a port authority receives. They belong to the yacht, so correcting one in the Fleet corrects every crew list made for it.")
+        }
+    }
+
+    /// The header boxes as one line, so a missing flag or registration number
+    /// is visible from the trip without opening the Fleet.
+    private var printedHeader: String {
+        guard let boat = store.selectedBoat else { return "No yacht on this trip." }
+        let values = [
+            boat.isComplete ? boat.name : "no name",
+            boat.flag.isEmpty ? "no flag" : boat.flag,
+            boat.registrationPort.isEmpty ? "no port of registry" : boat.registrationPort,
+            boat.registrationNumber.isEmpty ? "no registration no." : boat.registrationNumber,
+        ]
+        return values.joined(separator: "  ·  ")
+    }
+
+    private func pickYacht(_ boatID: UUID?) {
+        guard let boatID, var updated = trip, updated.boatID != boatID else { return }
+        updated.boatID = boatID
+        store.updateTrip(updated)
+        trip = store.data.trips.first { $0.id == updated.id }
     }
 
     // MARK: - Snapshots
@@ -221,36 +299,13 @@ struct TripScreen: View {
     // MARK: - Pieces
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Eyebrow(text: title)
-            VStack(spacing: 0) { content() }.philonInset(radius: Theme.Radius.panel)
-        }
+        FormSection(title: title) { content() }
     }
 
-    private var rule: some View {
-        Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, 138)
-    }
-
-    private func field(_ label: String, placeholder: String, text: Binding<String>) -> some View {
-        HStack(spacing: 10) {
-            Text(label)
-                .font(Theme.Font.support)
-                .foregroundStyle(Theme.inkSecondary)
-                .frame(width: 118, alignment: .trailing)
-
-            FocusAwareField(placeholder: placeholder, text: text, onCommit: normaliseAndSave)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-    }
+    private var rule: some View { FormRule() }
 
     private func datePicker(_ label: String, selection: Binding<Date>, range: PartialRangeFrom<Date>?) -> some View {
-        HStack(spacing: 10) {
-            Text(label)
-                .font(Theme.Font.support)
-                .foregroundStyle(Theme.inkSecondary)
-                .frame(width: 118, alignment: .trailing)
-
+        FormRow(label: label) {
             Group {
                 if let range {
                     DatePicker(label, selection: selection, in: range, displayedComponents: .date)
@@ -260,38 +315,6 @@ struct TripScreen: View {
             }
             .labelsHidden()
             .font(Theme.Font.body)
-
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-    }
-}
-
-/// A text field that reports when it has been left, so the value can be
-/// normalised then rather than under the caret.
-private struct FocusAwareField: View {
-    let placeholder: String
-    @Binding var text: String
-    let onCommit: () -> Void
-
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        TextField(placeholder, text: $text)
-            .textFieldStyle(.plain)
-            .font(Theme.Font.body)
-            .foregroundStyle(Theme.ink)
-            .focused($focused)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(Theme.panel)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous)
-                    .strokeBorder(focused ? Theme.accentText.opacity(0.55) : Theme.hairlineStrong, lineWidth: 1)
-            )
-            .onSubmit(onCommit)
-            .onChange(of: focused) { _, isFocused in if !isFocused { onCommit() } }
     }
 }

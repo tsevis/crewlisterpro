@@ -18,6 +18,38 @@ against the document image.**
 
 ---
 
+## The fleet
+
+Every yacht you charter, described once. Name, flag, port of registry and
+registration number are facts about the vessel, not about this August's booking —
+so they are held on the yacht and read by every crew list made for it, instead of
+being retyped per trip with four fresh chances a season to send a port authority
+the wrong registration number.
+
+- **Add, duplicate, retire, delete.** Duplicating gives you a sister ship:
+  everything but the name and the registration number. Retiring takes a sold
+  yacht out of the picker while leaving it named on its past crew lists — a
+  charter can be queried long after it sailed. A yacht any trip still uses cannot
+  be deleted, and the button says which trips.
+- **A preview of the header boxes**, showing exactly what those four values will
+  print as, with a warning when one would print blank.
+- Trips pick a yacht from the fleet. One yacht in the fleet is not a choice, so
+  it is used without asking; set a default in Settings when there are several.
+
+## Settings
+
+Defaults for this Mac, grouped by the moment each one applies: when a trip is
+made (charter start day and length, which yacht), when a yacht is added (flag and
+port of registry, since most fleets share both), what an export writes (CSV, PDF
+or both; the file-name prefix; a standing folder or ask-each-time; reveal
+afterwards), the optional local model, and how many earlier versions of the
+database are kept.
+
+Two sections are about what is deliberately **not** configurable. Nothing there
+can skip the review — there is no preference to auto-confirm a field, to trust a
+clean check digit, or to export a document nobody has looked at. And nothing
+sends anything anywhere: no server, no account, no sync.
+
 ## The review pane
 
 ![CrewListr Pro review pane](docs/screenshots/01-review.png)
@@ -25,12 +57,18 @@ against the document image.**
 Three columns follow the operator's actual sequence — **choose a trip, pick a document,
 check it against its own image.**
 
-- **Trips** carry the yacht, the voyage dates and how many documents are cleared.
+- **Trips** are a horizontal strip of yachts across the command line — every charter and its
+  cleared-count readable at once, rather than one name with the rest behind a dropdown. A new
+  trip already runs Saturday to Saturday; moving the departure moves the return with it.
 - **Documents** show the status the *operator* has reached, not what a check digit guessed.
   A freshly imported passport reads "Awaiting review" even when its MRZ is perfect.
 - **Review** puts the decrypted document image beside its extracted fields. Every field is
   editable, every field is validated, and every field carries its own confirm toggle.
   Editing a value retracts its confirmation — a correction is re-checked like any other read.
+  Dates are shown the way the passport prints them (`20 OCT 1972`) and stored as ISO-8601;
+  either form can be typed. Below the fields sit the two facts that belong to the trip rather
+  than the document: whether this person is the **client** who signs the papers — one per
+  trip, skipper or passenger — and, for the skipper alone, an email address.
 
 The strip above the Import button always names the next thing standing between this trip and
 a crew list ("Name the yacht.", "GIULIA ROSSI: Nationality, Date of birth, Sex still
@@ -43,10 +81,19 @@ unconfirmed."), rather than only greying the export button out.
 Export writes two files, named for the yacht and the departure date so two charters leaving
 the same day cannot overwrite each other:
 
-- **PDF** — a boxed header (yacht, flag, port of registry, registration number), a SKIPPER
-  section and a PASSENGERS section, paginated so a large crew cannot fall off the page.
+- **PDF** — a boxed header (yacht, flag, port of registry, registration number) with the
+  skipper's email under it, a SKIPPER section, a PASSENGERS section and a signature line
+  naming the client, paginated so a large crew cannot fall off the page. Every date is
+  printed as `29 AUG 2026`, the form the documents themselves use.
 - **CSV** — UTF-8 with a BOM, CRLF line endings, and leading `=`/`+`/`-`/`@` neutralised so a
-  name read off a scanned document cannot execute in a spreadsheet.
+  name read off a scanned document cannot execute in a spreadsheet. Dates stay ISO-8601 here,
+  because this file is read by software; `skipper_email` and `is_client` are appended after
+  the existing columns, so anything already reading it by position is unaffected.
+
+A voyage date is the day the operator picked on their own calendar, and is written down as
+that day. It used to be formatted in UTC, which printed a departure chosen as 29/08 as 28/08
+for everyone east of Greenwich; `VoyageDate` and `DocumentDate` now keep the two senses of
+"date" apart.
 
 A sample of both is in [`docs/sample/`](docs/sample/), generated from fictional ICAO specimen
 documents.
@@ -148,7 +195,7 @@ CREWLISTR_FIXTURES=/path/to/documents CREWLISTR_OUTPUT=./TestOutput swift test -
 
 ## Testing
 
-126 tests, no unexpected failures. Eleven are opt-in and skip unless their environment
+472 tests, no unexpected failures. Nineteen are opt-in and skip unless their environment
 variable is set — they touch real identity documents or the live encrypted store.
 
 | Suite | Covers |
@@ -156,6 +203,13 @@ variable is set — they touch real identity documents or the live encrypted sto
 | `MRZTests` | Check digits, two-digit year resolution, name parsing, every rejection path |
 | `ModelTests` | The export gate, field validation, persistence shapes and schema versioning |
 | `ExportServiceTests` | CSV structure and injection safety, PDF pagination and content |
+| `ExportClientTests` | The client signature block, the skipper's email, and which file gets which date format |
+| `DateFormatTests` | Voyage days across time zones, the Saturday charter week, `20 OCT 1972` both ways |
+| `FleetTests` | Keeping, retiring and deleting a yacht, and which one a new trip charters |
+| `SettingsTests` | The defaults, the guards on them, and what each one changes |
+| `ScreenshotTests` *(opt-in)* | Renders every screen to a PNG so a layout can be looked at |
+| `InteractionTests` | Types into the real fields and leaves them — what a click actually does |
+| `VoyageAndClientTests` | Picking dates, naming the client, and where the skipper's email lives |
 | `DocumentProcessorTests` | Rotate, crop and enhance |
 | `StoragePathTests` | The application-support path and SQLCipher open |
 | `SQLCipherTests` | That the database file contains no plaintext |
@@ -168,6 +222,46 @@ variable is set — they touch real identity documents or the live encrypted sto
 ```bash
 swift test --enable-code-coverage
 ```
+
+### Clicking the app
+
+`swift test` covers everything except a click. Nearly every button here uses a
+custom `ButtonStyle`, so SwiftUI draws it and there is no `NSButton` for an
+in-process test to press — and the one control AppKit does back, the client
+checkbox, has no action to send, while a synthetic `mouseDown` on it hangs
+waiting for a mouse-up from an event queue no `NSApplication` is running.
+`InteractionTests` gets as far as that allows: it types into the real field
+editors and leaves them, which is the whole commit-on-blur path.
+
+The rest needs XCUITest, and a Swift package cannot host a UI-testing bundle.
+So `scripts/uitest.sh` generates a small Xcode project from `project.yml` over
+the *same* sources — no copy, no second target list to keep in step — and drives
+the built app:
+
+```bash
+./scripts/uitest.sh
+```
+
+`Package.swift` remains the source of truth: `swift build -c release` and
+`scripts/release.sh` do not know this project exists, and the generated
+`.xcodeproj` is not committed.
+
+Unlike the rest of the suite, this one is not silent and cannot be. XCUITest
+synthesises real keyboard and mouse events on the desktop it runs on: the app
+opens, takes focus over whatever is in front of it, and is clicked. Anything
+that steals focus mid-run can land a click somewhere unintended, so leave the
+machine alone while it runs — and it is deliberately not part of `swift test`
+for that reason.
+
+Two things make it safe to run. The app under test takes a different bundle
+identifier from the shipping one, so LaunchServices cannot answer a launch with
+the copy in `/Applications`. And `CREWLISTR_STORE_ROOT` — honoured only in a
+debug build — points it at a throwaway store, because the real binary keeps the
+operator's trips, their sealed passport scans and its own encryption key under
+one directory, and a test that clicks "Delete Trip and Documents" against that
+directory deletes a real charter. `CREWLISTR_SEED=demo`, also debug-only, fills
+an empty store with a fictional fleet, since the controls worth clicking only
+exist once a trip has documents on it.
 
 Opt-in switches:
 
@@ -210,18 +304,28 @@ Sources/CrewListrProMac/
   OCRService.swift       Vision text recognition
   DocumentProcessor.swift Rotate, crop, enhance
   CrewStore.swift        Observable state; the single writer to the encrypted store
+  CrewStoreFleet.swift   The fleet: keeping, retiring and chartering a yacht
+  CrewStoreReview.swift  Confirming fields, roles, the client and the skipper's email
   SecureStore.swift      SQLCipher + AES-GCM + Keychain
   ModelManager.swift     Local model download with integrity checking
   LlamaVisionRescuer.swift  Optional local VLM
   ExportService.swift    CSV and the printed crew list
+  DateFormats.swift      Voyage days vs. document dates, and the charter week
+  Settings.swift         The operator's defaults, and the guards on them
+  HeadlessExport.swift   The --export / --list command line
   UI/
-    AppShell.swift       App entry, the three-column shell, storage-failure view
-    TripSidebar.swift    Trips, readiness, delete
+    AppShell.swift       App entry, the window shell, storage-failure view
+    AppChrome.swift      Screen row, command line, panels and banners
+    TripStrip.swift      The horizontal strip of yachts, and what can be done to one
+    FleetScreen.swift    The fleet, and the yacht being looked at
+    FleetDetail.swift    One yacht: its four printed values, and what they look like
+    SettingsScreen.swift Every default, grouped by when it applies
     DocumentColumn.swift Documents, review status, export readiness
-    ReviewDetail.swift   The field-by-field review pane
+    ReviewDetail.swift   The field-by-field review pane, the client and the skipper's email
     DocumentPreview.swift Decrypted image with zoom and rotate
-    TripInspector.swift  Yacht and voyage details
-    ExportSheet.swift    Crew-list preview, blockers and export
+    TripScreen.swift     Yacht, voyage dates and earlier versions
+    CrewListScreen.swift Crew-list preview, blockers and export
+    Design/              Theme, shared components and the brand assets
 ```
 
 ---

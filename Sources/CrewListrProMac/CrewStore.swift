@@ -113,7 +113,12 @@ final class CrewStore {
         defer { isOpening = false }
         do {
             data = try await secureStore.load()
+            #if DEBUG
+            // Only ever onto an empty store, and only when asked. See DebugSeed.
+            if let seeded = DebugSeed.seeded(onto: data) { data = seeded }
+            #endif
             hasLoaded = true
+            applyStorageSettings()
             reportDecodingLosses()
             // Open on the work in hand rather than on two empty columns: the
             // first trip, and within it the first document still needing review.
@@ -145,6 +150,30 @@ final class CrewStore {
         ]).joined(separator: "\n")
     }
 
+    // MARK: - Settings
+
+    /// The operator's defaults. Read freely; write through `updateSettings`,
+    /// which is where they are brought back into range.
+    var settings: AppSettings { data.settings }
+
+    /// Takes a whole new value rather than mutating in place, so a caller
+    /// always builds the settings it wants and this stays the single point
+    /// where they are checked.
+    func updateSettings(_ settings: AppSettings) {
+        let normalised = settings.normalised()
+        guard normalised != data.settings else { return }
+        data.settings = normalised
+        applyStorageSettings()
+        persist()
+    }
+
+    /// Pushes the settings the encrypted store itself obeys down to it.
+    private func applyStorageSettings() {
+        guard let secureStore else { return }
+        let depth = data.settings.versionsKept
+        Task { await secureStore.setBackupDepth(depth) }
+    }
+
     // MARK: - Trips and boats
 
     /// The trips the picker offers: everything not put away.
@@ -155,12 +184,23 @@ final class CrewStore {
     /// never be restored or erased.
     var archivedTrips: [Trip] { data.trips.filter(\.isArchived) }
 
+    /// Charters a yacht.
+    ///
+    /// The yacht is the one named, or the fleet's default, or the only one in
+    /// the fleet — and if the operator has not built a fleet yet, a fresh
+    /// placeholder, so a first run still produces a working trip.
     @discardableResult
-    func createTrip() -> UUID {
-        let boat = Boat(name: Boat.placeholderName)
-        let departure = Calendar.current.startOfDay(for: .now)
-        let trip = Trip(boatID: boat.id, departureDate: departure, returnDate: Calendar.current.date(byAdding: .day, value: 7, to: departure) ?? departure)
-        data.boats.append(boat)
+    func createTrip(boatID: UUID? = nil) -> UUID {
+        // Validated rather than trusted: a caller holding an id for a yacht
+        // that has since been deleted would otherwise make a charter pointing
+        // at nothing, which no screen can show and no export can name.
+        let named: UUID? = boatID.flatMap { id in data.boats.contains { $0.id == id } ? id : nil }
+        let chartered = named ?? chosenBoatForNewTrip()
+        // Saturday to Saturday unless this fleet says otherwise. Any other pair
+        // of dates is one the operator picked on purpose.
+        let week = VoyageDate.charterWeek(startingOn: settings.charterStartWeekday,
+                                          lastingDays: settings.charterLengthDays)
+        let trip = Trip(boatID: chartered, departureDate: week.departure, returnDate: week.arrival)
         data.trips.append(trip)
         selectedTripID = trip.id
         selectedDocumentID = nil
@@ -168,28 +208,67 @@ final class CrewStore {
         return trip.id
     }
 
-    func updateBoat(_ boat: Boat) {
-        guard let index = data.boats.firstIndex(where: { $0.id == boat.id }) else { return }
-        var updated = boat
-        // A blank name is never a value anyone means, in the same way a return
-        // before departure never is: the yacht's name is printed in the crew
-        // list's header box, and an empty one clears port as "Untitled yacht".
-        // The trip editor saves as you type, so an emptied field would
-        // otherwise overwrite a real name the moment it lost focus.
-        if updated.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            updated.name = data.boats[index].name
+    /// Which yacht an unnamed new trip is for.
+    ///
+    /// The default, then the one most recently chartered, then the first in the
+    /// fleet — and a placeholder ONLY when the fleet is empty. That last rule is
+    /// the important one: minting a "NEW YACHT" while three real ones sit in the
+    /// fleet gave the operator a charter for a vessel they do not own and a
+    /// fourth row in their fleet list, once per ⌘N, and nothing could remove it
+    /// while the trip existed.
+    ///
+    /// Appends to the fleet as a side effect in that last case, which is why
+    /// this is not a computed property.
+    private func chosenBoatForNewTrip() -> UUID {
+        if let preferred = settings.defaultBoatID, let boat = boat(withID: preferred), !boat.isRetired {
+            return preferred
         }
-        data.boats[index] = updated
-        persist()
+        // The yacht this operator was last working with is a far better guess
+        // than the alphabetically first one.
+        if let recent = data.trips.last?.boatID, let boat = boat(withID: recent), !boat.isRetired {
+            return recent
+        }
+        if let first = fleet.first { return first.id }
+        let placeholder = Boat(name: Boat.placeholderName)
+        data.boats.append(placeholder)
+        return placeholder.id
     }
 
     func updateTrip(_ trip: Trip) {
         guard let index = data.trips.firstIndex(where: { $0.id == trip.id }) else { return }
         var updated = trip
+        // Stripped to the start of the day in the operator's own calendar. A
+        // voyage date is a day, not an instant, and one stored at 14:37 crosses
+        // a day boundary as soon as anything reads it from another time zone.
+        updated.departureDate = VoyageDate.day(updated.departureDate)
+        updated.returnDate = VoyageDate.day(updated.returnDate)
         // A return before departure is always a typo; clamp rather than export it.
         if updated.returnDate < updated.departureDate { updated.returnDate = updated.departureDate }
         data.trips[index] = updated
         persist()
+    }
+
+    /// Moves the departure, and the return with it.
+    ///
+    /// The charter keeps its length: an operator shifting a week-long trip by a
+    /// fortnight means a week starting a fortnight later, not a three-week
+    /// voyage. Picking the return afterwards overrides that, which is what
+    /// `setReturnDate` is for.
+    func setDepartureDate(_ date: Date, onTripWith id: UUID) {
+        guard let trip = data.trips.first(where: { $0.id == id }) else { return }
+        let departure = VoyageDate.day(date)
+        let length = Calendar.current.dateComponents([.day], from: VoyageDate.day(trip.departureDate),
+                                                     to: VoyageDate.day(trip.returnDate)).day ?? 0
+        var updated = trip
+        updated.departureDate = departure
+        updated.returnDate = Calendar.current.date(byAdding: .day, value: length, to: departure) ?? departure
+        updateTrip(updated)
+    }
+
+    func setReturnDate(_ date: Date, onTripWith id: UUID) {
+        guard var trip = data.trips.first(where: { $0.id == id }) else { return }
+        trip.returnDate = VoyageDate.day(date)
+        updateTrip(trip)
     }
 
     /// Puts a finished charter away. Destroys nothing.
@@ -231,15 +310,16 @@ final class CrewStore {
         let documents = data.documents.filter { $0.tripID == id }
         for document in documents { discardFiles(of: document) }
         let personIDs = Set(documents.map(\.personID))
-        let boatID = data.trips.first { $0.id == id }?.boatID
 
         data.documents.removeAll { $0.tripID == id }
         data.assignments.removeAll { $0.tripID == id }
         data.people.removeAll { personIDs.contains($0.id) }
         data.trips.removeAll { $0.id == id }
-        if let boatID, !data.trips.contains(where: { $0.boatID == boatID }) {
-            data.boats.removeAll { $0.id == boatID }
-        }
+        // The yacht stays. It used to be deleted along with its last trip,
+        // which was right when a yacht existed only for one charter and is
+        // wrong now that the fleet is a list the operator keeps: erasing a
+        // vessel because this season's booking was cancelled is not something
+        // deleting a trip should do. `deleteBoat` is how a yacht leaves.
         if selectedTripID == id {
             selectedTripID = activeTrips.first?.id
             selectedDocumentID = nil
@@ -302,45 +382,6 @@ final class CrewStore {
         persist()
     }
 
-    func setField(_ field: CrewField, to value: String, on documentID: UUID) {
-        guard let index = data.documents.firstIndex(where: { $0.id == documentID }) else { return }
-        data.documents[index][field] = value
-        syncPerson(from: data.documents[index])
-        persist()
-    }
-
-    func setVerified(_ verified: Bool, field: CrewField, on documentID: UUID) {
-        guard let index = data.documents.firstIndex(where: { $0.id == documentID }) else { return }
-        // A field that fails validation cannot be marked correct.
-        if verified, data.documents[index].validation(of: field).isBlocking { return }
-        if verified { data.documents[index].verifiedFields.insert(field.rawValue) }
-        else { data.documents[index].verifiedFields.remove(field.rawValue) }
-        refreshRisk(at: index)
-        persist()
-    }
-
-    /// Confirms every field that currently passes validation.
-    func verifyAllValidFields(on documentID: UUID) {
-        guard let index = data.documents.firstIndex(where: { $0.id == documentID }) else { return }
-        for field in CrewField.allCases where !data.documents[index].validation(of: field).isBlocking {
-            guard !data.documents[index][field].isEmpty || !field.isRequiredForExport else { continue }
-            data.documents[index].verifiedFields.insert(field.rawValue)
-        }
-        refreshRisk(at: index)
-        persist()
-    }
-
-    func rejectDocument(_ documentID: UUID, reason: String) {
-        guard let index = data.documents.firstIndex(where: { $0.id == documentID }) else { return }
-        data.documents[index].risk = .high
-        data.documents[index].verifiedFields = []
-        data.documents[index].riskReasons = [reason]
-        if let person = data.people.firstIndex(where: { $0.id == data.documents[index].personID }) {
-            data.people[person].verification = .rejected
-        }
-        persist()
-    }
-
     func deleteDocument(_ documentID: UUID) {
         guard let index = data.documents.firstIndex(where: { $0.id == documentID }) else { return }
         let document = data.documents[index]
@@ -352,22 +393,6 @@ final class CrewStore {
         }
         if selectedDocumentID == documentID { selectedDocumentID = selectedTripDocuments.first?.id }
         persist()
-    }
-
-    func setRole(_ role: CrewRole, forPersonID personID: UUID) {
-        guard let tripID = selectedTripID else { return }
-        if role == .skipper {
-            for index in data.assignments.indices where data.assignments[index].tripID == tripID {
-                data.assignments[index].role = data.assignments[index].personID == personID ? .skipper : .passenger
-            }
-        } else if let index = data.assignments.firstIndex(where: { $0.tripID == tripID && $0.personID == personID }) {
-            data.assignments[index].role = .passenger
-        }
-        persist()
-    }
-
-    func role(forPersonID personID: UUID) -> CrewRole {
-        data.assignments.first { $0.tripID == selectedTripID && $0.personID == personID }?.role ?? .passenger
     }
 
     // MARK: - Original image
@@ -453,6 +478,10 @@ final class CrewStore {
         defer { activity = nil }
         do {
             data = try await secureStore.restore(identifier)
+            // The restored payload carries its own settings, and the store
+            // obeys one of them. The other two write paths into `data.settings`
+            // — `load` and `updateSettings` — both do this; this is the third.
+            applyStorageSettings()
             // A snapshot is older than the live store by definition, so it is
             // likelier than anything to hold a record this build salvages.
             reportDecodingLosses()
@@ -471,6 +500,9 @@ final class CrewStore {
         return "\(trips), \(documents)"
     }
 
+    /// Whether the local vision model is on this Mac. Stored here rather than
+    /// in the extension that manages it, because an extension cannot hold
+    /// state — see `CrewStoreLocalModel.swift` for everything that reads it.
     // MARK: - The optional local model
 
     /// Whether the local vision model is on this Mac. The rescue action offers
@@ -518,6 +550,23 @@ final class CrewStore {
         await work.value
         cancellableWork = nil
         activity = nil
+    }
+
+    /// Removes this app's copy of the local model.
+    ///
+    /// Only its own copy: `ModelManager.removeDownload` will not touch a model
+    /// found in the HuggingFace cache, which belongs to whatever else on this
+    /// Mac downloaded it. So this can leave `localModelIsInstalled` true, which
+    /// is the honest answer — the model really is still available.
+    func removeLocalModel() async {
+        guard let manager = try? ModelManager() else { return }
+        let removed = await manager.removeDownload(.qwen3VL8BQ4)
+        await refreshLocalModelState()
+        if !removed || localModelIsInstalled {
+            errorMessage = localModelIsInstalled
+                ? "This app's copy was removed, but the model is still on this Mac — another program downloaded it into the shared model cache, and erasing that is not this app's to do."
+                : "There was no downloaded copy to remove."
+        }
     }
 
     /// Errors reach the operator with their recovery suggestion attached; an
@@ -618,7 +667,9 @@ final class CrewStore {
             .filter { $0.tripID == tripID }
             .map { document in
                 let assigned = data.assignments.first { $0.tripID == tripID && $0.personID == document.personID }
-                return CrewListRow(document: document, role: assigned?.role ?? .passenger)
+                return CrewListRow(document: document,
+                                   role: assigned?.role ?? .passenger,
+                                   isClient: assigned?.isClient ?? false)
             }
             .sorted { lhs, rhs in
                 if lhs.role != rhs.role { return lhs.role == .skipper }
@@ -626,19 +677,56 @@ final class CrewStore {
             }
     }
 
-    func exportSelectedTrip(to directory: URL) throws {
+    /// Writes the crew list, and says what it wrote.
+    ///
+    /// Which files depends on the settings; `AppSettings.normalised()`
+    /// guarantees at least one, so this can never succeed having written
+    /// nothing.
+    @discardableResult
+    func exportSelectedTrip(to directory: URL) throws -> [URL] {
         guard let trip = selectedTrip, let boat = selectedBoat else { throw ExportError.noTripSelected }
         guard selectedTripCanExport else { throw ExportError.blocked(exportBlockers) }
         let rows = crewRows(forTripID: trip.id)
-        let base = ExportService.fileNameStem(boat: boat, trip: trip)
-        try ExportService.exportCSV(to: directory.appending(path: "\(base).csv"), trip: trip, boat: boat, rows: rows)
-        try ExportService.exportPDF(to: directory.appending(path: "\(base).pdf"), trip: trip, boat: boat, rows: rows)
+        let base = ExportService.fileNameStem(boat: boat, trip: trip, prefix: settings.fileNamePrefix)
+        let email = skipperEmail(forTripID: trip.id)
+
+        var written: [URL] = []
+        if settings.writesCSV {
+            let url = directory.appending(path: "\(base).csv")
+            try ExportService.exportCSV(to: url, trip: trip, boat: boat, rows: rows, skipperEmail: email)
+            written.append(url)
+        }
+        if settings.writesPDF {
+            let url = directory.appending(path: "\(base).pdf")
+            try ExportService.exportPDF(to: url, trip: trip, boat: boat, rows: rows, skipperEmail: email)
+            written.append(url)
+        }
+        return written
+    }
+
+    /// The folder the operator chose to export into, if it is still a folder
+    /// they can write to.
+    ///
+    /// Checked rather than trusted: it is a path typed into a setting weeks
+    /// ago, and an unplugged drive or a renamed folder must send the export
+    /// back to asking rather than fail at the write.
+    var standingExportFolder: URL? {
+        let path = settings.exportFolderPath
+        guard !path.isEmpty else { return nil }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue,
+              FileManager.default.isWritableFile(atPath: path)
+        else { return nil }
+        return URL(fileURLWithPath: path)
     }
 
     // MARK: - Internals
 
     /// Keeps the person registry in step with the document that identifies them.
-    private func syncPerson(from document: CrewDocument) {
+    ///
+    /// Internal rather than private only because `CrewStore`'s own extensions
+    /// live in other files; nothing outside this type calls it.
+    func syncPerson(from document: CrewDocument) {
         guard let index = data.people.firstIndex(where: { $0.id == document.personID }) else { return }
         data.people[index].fullName = document[.fullName]
         data.people[index].nationality = document[.nationality]
@@ -646,7 +734,8 @@ final class CrewStore {
         data.people[index].verification = document.canExport() ? .verified : .pending
     }
 
-    private func refreshRisk(at index: Int) {
+    /// Internal for the same reason as `syncPerson`.
+    func refreshRisk(at index: Int) {
         guard data.documents[index].risk != .high else { return }
         data.documents[index].risk = data.documents[index].canExport() ? .low : .review
         syncPerson(from: data.documents[index])
@@ -662,7 +751,11 @@ final class CrewStore {
     /// needs it, because `persistChain` already serialises writes.
     func flushForTesting() async { _ = await persistChain.value }
 
-    private func persist() {
+    /// Internal rather than private only because `CrewStore`'s own extensions
+    /// live in other files. Nothing outside this type may call it: every
+    /// mutation is expected to persist itself, and a caller reaching for this
+    /// is a caller that has changed `data` from outside.
+    func persist() {
         guard let secureStore else { return }
         // Never write over a store that has not been read yet. See `hasLoaded`.
         // Refusing rather than trapping: losing an edit is recoverable, and a

@@ -99,12 +99,67 @@ struct FieldReviewPane: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .accessibilityIdentifier("review.role")
 
             Text("A crew list needs exactly one skipper; naming a new one demotes the previous.")
                 .font(Theme.Font.meta)
                 .foregroundStyle(Theme.inkTertiary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            clientToggle
+
+            // Only where it is asked for. A field that appears for every
+            // passenger invites an address to be typed into all of them, and
+            // the crew list carries exactly one.
+            if role == .skipper { skipperEmail }
         }
+    }
+
+    /// Beside the role rather than inside it: the client chartered the yacht
+    /// and is aboard as the skipper or as a passenger, so it is a second fact
+    /// about the same person and not a third option.
+    private var clientToggle: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Toggle(isOn: Binding(
+                get: { store.isClient(personID: document.personID) },
+                set: { store.setClient($0, forPersonID: document.personID) }
+            )) {
+                Text("Client — signs the papers for this charter")
+                    .font(Theme.Font.support)
+                    .foregroundStyle(Theme.ink)
+            }
+            .toggleStyle(.checkbox)
+            .accessibilityIdentifier("review.client")
+
+            Text("One person per trip. Naming a new client clears the previous one.")
+                .font(Theme.Font.meta)
+                .foregroundStyle(Theme.inkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 3)
+    }
+
+    private var skipperEmail: some View {
+        let value = store.email(forPersonID: document.personID)
+        let validation = ContactValidator.validate(email: value)
+
+        return VStack(alignment: .leading, spacing: 5) {
+            Eyebrow(text: "Skipper's email")
+
+            CommitField(
+                identifier: "review.skipperEmail",
+                placeholder: "skipper@example.com",
+                value: value,
+                isSuspect: validation.message != nil,
+                onCommit: { store.setEmail($0, forPersonID: document.personID) }
+            )
+
+            Text(validation.message ?? "Printed on the crew list. The only contact detail this app collects.")
+                .font(Theme.Font.meta)
+                .foregroundStyle(validation.message == nil ? Theme.inkTertiary : Theme.caution)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 6)
     }
 
     /// `.warning-list` — what extraction could not settle, said plainly rather
@@ -192,8 +247,8 @@ private struct FieldRow: View {
                     )
                     .onSubmit { commit() }
                     .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
-                    .onChange(of: value) { _, newValue in if !focused { draft = newValue } }
-                    .onAppear { draft = value }
+                    .onChange(of: value) { _, newValue in if !focused { draft = field.presented(newValue) } }
+                    .onAppear { draft = field.presented(value) }
 
                 // A model's value looks exactly like a checksum-validated one
                 // unless the interface says otherwise. On a damaged document it
@@ -252,15 +307,25 @@ private struct FieldRow: View {
                   : (isVerified ? "Confirmed against the document image" : "Confirm this matches the document image"))
             .accessibilityLabel("\(field.label) confirmed")
             .accessibilityAddTraits(isVerified ? [.isSelected] : [])
+            .accessibilityIdentifier("review.confirm.\(field.rawValue)")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .background(isVerified ? Theme.verifiedFill.opacity(0.5) : Color.clear)
     }
 
+    /// A date typed as `20 oct 1972` is stored as `1972-10-20` and comes back
+    /// as `20 OCT 1972`; one that parses as neither is stored as typed, so the
+    /// validation line under the field can say what is wrong with it.
     private func commit() {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed != value else { return }
-        onEdit(trimmed)
+        let canonical = field.stored(draft)
+        guard canonical != value else {
+            // Nothing changed, but the operator may have typed a second spelling
+            // of the same day. Show it back in the one this app uses.
+            draft = field.presented(value)
+            return
+        }
+        onEdit(canonical)
+        draft = field.presented(canonical)
     }
 }

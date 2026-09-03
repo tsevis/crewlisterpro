@@ -404,3 +404,146 @@ struct PhilonMetric: View {
         .background(Theme.ground, in: RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
     }
 }
+
+
+// MARK: - A field that saves when you leave it
+
+/// One line of text that reports its value when the field gives up focus.
+///
+/// Value in, callback out, rather than a `Binding`: every screen here saves
+/// through the store, and a binding straight into a model would let a
+/// half-typed value reach the database on every keystroke. Normalising on every
+/// keystroke also fights the field — uppercasing a flag as it is typed moves
+/// the caret — so the value is held as typed and squared up on the way out.
+///
+/// Three near-identical copies of this existed, one per screen. They drifted:
+/// one of them forgot to put the trimmed value back in the box.
+struct CommitField: View {
+    /// A stable name for a UI test to find this field by. Optional, because
+    /// most fields are reachable by position within their own panel.
+    var identifier: String?
+    let placeholder: String
+    let value: String
+    var isSuspect = false
+    var font: Font = Theme.Font.body
+    /// Applied to what was typed before it is compared and saved — uppercasing
+    /// a flag, say. Identity by default.
+    var normalise: (String) -> String = { $0 }
+    let onCommit: (String) -> Void
+
+    @State private var draft = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField(placeholder, text: $draft)
+            .textFieldStyle(.plain)
+            .font(font)
+            .foregroundStyle(Theme.ink)
+            .focused($focused)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Theme.panel)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous)
+                    .strokeBorder(border, lineWidth: 1)
+            )
+            // Return leaves the field rather than saving in place, so there is
+            // exactly one commit path and it always runs unfocused. That is
+            // what lets the observer below be trusted to put the stored value
+            // back in the box.
+            .onSubmit { focused = false }
+            .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
+            // Only while unfocused: a value arriving from elsewhere must not
+            // overwrite what the operator is in the middle of typing.
+            .onChange(of: value) { _, newValue in if !focused { draft = newValue } }
+            .onAppear { draft = value }
+            .accessibilityIdentifier(identifier ?? "")
+    }
+
+    private var border: Color {
+        if focused { return Theme.accentText.opacity(0.55) }
+        return isSuspect ? Theme.caution.opacity(0.5) : Theme.hairlineStrong
+    }
+
+    /// Saves, then shows back whatever the store actually kept.
+    ///
+    /// Not what was typed, and not even what was cleaned: a store is allowed to
+    /// refuse an edit or rewrite it. `CrewStore.updateBoat` restores a name
+    /// emptied by accident, and `AppSettings.normalised()` turns "crew list"
+    /// back into "crew-list". Both leave `value` unchanged, so nothing fires —
+    /// and the field sat there showing a value that was never stored, next to a
+    /// preview showing the one that was.
+    ///
+    /// Assigning `value` covers exactly that case. When the edit *is* accepted,
+    /// `value` changes and the observer above replaces this a moment later with
+    /// the new one.
+    private func commit() {
+        let cleaned = normalise(draft.trimmingCharacters(in: .whitespacesAndNewlines))
+        if cleaned != value { onCommit(cleaned) }
+        draft = value
+    }
+}
+
+/// Label on the left, field on the right — the row shape both the trip and the
+/// fleet forms are built from.
+struct FormRow<Content: View>: View {
+    let label: String
+    var labelWidth: CGFloat = 118
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(Theme.Font.support)
+                .foregroundStyle(Theme.inkSecondary)
+                .frame(width: labelWidth, alignment: .trailing)
+
+            content
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+    }
+}
+
+/// A caption inside a form panel, for the sentence that explains the rows above
+/// it.
+struct FormCaption: View {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(Theme.Font.meta)
+            .foregroundStyle(Theme.inkTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+    }
+}
+
+/// The hairline between two rows of a form panel.
+struct FormRule: View {
+    var inset: CGFloat = 138
+
+    var body: some View {
+        Rectangle().fill(Theme.hairline).frame(height: 1).padding(.leading, inset)
+    }
+}
+
+/// An eyebrow over a bordered stack of form rows.
+struct FormSection<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Eyebrow(text: title)
+            VStack(spacing: 0) { content }.philonInset(radius: Theme.Radius.panel)
+        }
+    }
+}

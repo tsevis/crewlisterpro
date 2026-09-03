@@ -56,9 +56,50 @@ actor SecureStore {
     private let keyData: Data
     private var database: OpaquePointer?
 
+    /// Where everything this app keeps lives: the encrypted database, its key,
+    /// the sealed originals and the snapshots. Exposed so Settings can show the
+    /// operator the folder rather than describing it.
+    nonisolated static func dataFolder(fileManager: FileManager = .default) -> URL? {
+        if let redirected = Self.redirectedRoot() { return redirected }
+        return try? fileManager
+            .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+            .appending(path: "CrewListrPro", directoryHint: .isDirectory)
+    }
+
+    /// The environment variable name a UI test sets to point this app at a
+    /// throwaway store.
+    static let rootOverrideVariable = "CREWLISTR_STORE_ROOT"
+
+    /// A store somewhere other than the operator's own.
+    ///
+    /// A UI test drives the real application binary, and the real binary keeps
+    /// its database, its key, its sealed passport scans and its snapshots under
+    /// one directory in Application Support. Without a way to move that, a UI
+    /// test would click "Delete Trip and Documents" on the operator's actual
+    /// charter. So the root can be redirected — and only in a debug build,
+    /// which is what `xcodebuild test` builds and what the shipped disk image
+    /// never is.
+    ///
+    /// This reveals nothing: a fresh root gets a fresh key and an empty
+    /// database, so redirecting it is a way to make the app ignore the
+    /// operator's data, never a way to read it.
+    private nonisolated static func redirectedRoot() -> URL? {
+        #if DEBUG
+        guard let path = ProcessInfo.processInfo.environment[rootOverrideVariable], !path.isEmpty else { return nil }
+        return URL(fileURLWithPath: path, isDirectory: true)
+        #else
+        return nil
+        #endif
+    }
+
     init(fileManager: FileManager = .default) throws {
-        let support = try fileManager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let root = support.appending(path: "CrewListrPro", directoryHint: .isDirectory)
+        let root: URL
+        if let redirected = Self.redirectedRoot() {
+            root = redirected
+        } else {
+            let support = try fileManager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            root = support.appending(path: "CrewListrPro", directoryHint: .isDirectory)
+        }
         documentsURL = root.appending(path: "documents", directoryHint: .isDirectory)
         backupsURL = root.appending(path: "backups", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: documentsURL, withIntermediateDirectories: true)
@@ -100,9 +141,27 @@ actor SecureStore {
     // except by re-importing every source document, which only worked because
     // those documents happened to still exist.
 
-    /// How many snapshots are kept. They are a few tens of kilobytes each, so
-    /// depth costs nothing and buys a long way back.
-    static let backupDepth = 30
+    /// How many snapshots are kept by default. They are a few tens of kilobytes
+    /// each, so depth costs nothing and buys a long way back.
+    static let defaultBackupDepth = AppSettings.defaultVersionsKept
+
+    /// The depth actually in force. Settable, because it is a setting — but it
+    /// lives here rather than being read from `AppData` on every prune, so the
+    /// store never has to reach back into the state it is storing.
+    private var backupDepth = SecureStore.defaultBackupDepth
+
+    /// Sets the cap. Deliberately does NOT prune.
+    ///
+    /// The setting is a stepper, and a stepper auto-repeats when held: pruning
+    /// here meant that dragging it from 200 down to 2 destroyed the operator's
+    /// entire recovery history in about a second, irreversibly, with nothing
+    /// asked. The cap takes effect the next time a snapshot is written, which
+    /// is soon enough for a limit whose purpose is to stop the history growing
+    /// without bound — and which gives an operator who mis-clicked the chance
+    /// to put it back.
+    func setBackupDepth(_ depth: Int) {
+        backupDepth = min(max(depth, AppSettings.fewestVersionsKept), AppSettings.mostVersionsKept)
+    }
 
     struct Backup: Identifiable, Sendable {
         let id: String
@@ -146,8 +205,8 @@ actor SecureStore {
     private func pruneBackups() {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: backupsURL.path(percentEncoded: false)) else { return }
         let ordered = names.filter { $0.hasSuffix(".bin") }.sorted()
-        guard ordered.count > Self.backupDepth else { return }
-        for name in ordered.prefix(ordered.count - Self.backupDepth) {
+        guard ordered.count > backupDepth else { return }
+        for name in ordered.prefix(ordered.count - backupDepth) {
             try? FileManager.default.removeItem(at: backupsURL.appending(path: name))
         }
     }

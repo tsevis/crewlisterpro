@@ -32,6 +32,7 @@ struct DocumentColumn: View {
                     DocumentRow(
                         document: document,
                         role: store.role(forPersonID: document.personID),
+                        isClient: store.isClient(personID: document.personID),
                         isSelected: store.selectedDocumentID == document.id
                     )
                     .tag(document.id)
@@ -45,6 +46,12 @@ struct DocumentColumn: View {
                     .contextMenu {
                         Button("Make Skipper") { store.setRole(.skipper, forPersonID: document.personID) }
                         Button("Make Passenger") { store.setRole(.passenger, forPersonID: document.personID) }
+                        Divider()
+                        if store.isClient(personID: document.personID) {
+                            Button("Not the Client") { store.setClient(false, forPersonID: document.personID) }
+                        } else {
+                            Button("Make Client") { store.setClient(true, forPersonID: document.personID) }
+                        }
                         Divider()
                         Button("Delete Document…", role: .destructive) { pendingDeletion = document }
                     }
@@ -108,6 +115,7 @@ struct DocumentColumn: View {
 private struct DocumentRow: View {
     let document: CrewDocument
     let role: CrewRole
+    let isClient: Bool
     let isSelected: Bool
 
     private var status: ReviewStatus { document.reviewStatus() }
@@ -130,6 +138,17 @@ private struct DocumentRow: View {
         }
     }
 
+    private func marker(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Font.eyebrow)
+            .tracking(0.4)
+            .foregroundStyle(Theme.accentText)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.thumbnail))
+            .fixedSize()
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             StatusMark(kind: mark, symbol: status.symbol, size: 22)
@@ -143,15 +162,11 @@ private struct DocumentRow: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
 
-                    if role == .skipper {
-                        Text("SKIPPER")
-                            .font(Theme.Font.eyebrow)
-                            .tracking(0.4)
-                            .foregroundStyle(Theme.accentText)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.thumbnail))
-                    }
+                    if role == .skipper { marker("SKIPPER") }
+                    // The client is on the printed form's signature line, so
+                    // "who signs" has to be answerable from the list rather
+                    // than only from the pane of whoever happens to be open.
+                    if isClient { marker("CLIENT") }
                 }
 
                 Text(document[.documentNumber].isEmpty ? "No number" : document[.documentNumber])

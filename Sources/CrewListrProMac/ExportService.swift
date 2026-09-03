@@ -10,28 +10,62 @@ enum ExportService {
 
     /// Includes the yacht so two trips departing the same day cannot overwrite
     /// each other, and stays filesystem-safe on every platform.
-    static func fileNameStem(boat: Boat, trip: Trip) -> String {
+    static func fileNameStem(boat: Boat, trip: Trip, prefix: String = AppSettings.defaultFileNamePrefix) -> String {
         let yacht = sanitised(boat.name.isEmpty ? "yacht" : boat.name)
-        return "crew-list-\(yacht)-\(CrewFieldValidator.iso8601String(trip.departureDate))"
+        // Already made filesystem-safe by `AppSettings.normalised()`, and
+        // sanitised again here because this function is also reachable with a
+        // prefix that never went through the settings.
+        // Case-preserving, unlike the yacht: the shipped default is
+        // "crew-list" and CREW-LIST is not the same word to anyone sorting a
+        // folder of these.
+        let stem = sanitised(prefix, uppercased: false)
+        // ISO here and nowhere else on the printed form: a file name is sorted,
+        // not read aloud, and `2026-08-29` sorts and `29 AUG 2026` does not.
+        return "\(stem.isEmpty ? AppSettings.defaultFileNamePrefix : stem)-\(yacht)-\(VoyageDate.iso(trip.departureDate))"
     }
 
-    private static func sanitised(_ value: String) -> String {
+    private static func sanitised(_ value: String, uppercased: Bool = true) -> String {
+        fileSafe(value, uppercased: uppercased)
+    }
+
+    /// The one rule for what may appear in a file name this app writes:
+    /// letters, digits, dash and underscore, with everything else collapsed to
+    /// a single dash.
+    ///
+    /// `AppSettings` validates the operator's file-name prefix through this
+    /// rather than keeping its own copy. Two implementations of "what is safe
+    /// in a file name" is two answers, and they drift.
+    static func fileSafe(_ value: String, uppercased: Bool = false) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let mapped = value.uppercased().unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
+        let source = uppercased ? value.uppercased() : value
+        let mapped = source.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
         return String(mapped).split(separator: "-").joined(separator: "-")
     }
 
     // MARK: - CSV
 
-    static func exportCSV(to url: URL, trip: Trip, boat: Boat, rows: [CrewListRow]) throws {
-        var lines = ["role,full_name,document_number,nationality,birth_date,sex,expiry_date,yacht,flag,registry_port,registration_number,departure_date,return_date"]
+    /// Every date here stays ISO-8601, including the voyage dates the PDF prints
+    /// as `29 AUG 2026`. This file is read by software — a spreadsheet, a port
+    /// authority's import — and a three-letter month is a string to it, not a
+    /// date. The printed form is where a person reads them.
+    ///
+    /// New columns are appended, never inserted. Something out there is already
+    /// reading this file by column position, and moving `full_name` from the
+    /// second field to the third would silently feed it a role where it expects
+    /// a name. `skipper_email` and `is_client` are therefore at the end, in the
+    /// order they were added, and anything added later goes after them.
+    static func exportCSV(to url: URL, trip: Trip, boat: Boat, rows: [CrewListRow], skipperEmail: String = "") throws {
+        var lines = ["role,full_name,document_number,nationality,birth_date,sex,expiry_date,yacht,flag,registry_port,registration_number,departure_date,return_date,skipper_email,is_client"]
         for row in rows {
             lines.append([
-                row.role.rawValue, row.fullName, row.documentNumber, row.nationality,
+                row.role.rawValue,
+                row.fullName, row.documentNumber, row.nationality,
                 row.birthDate, row.sex, row.expiryDate,
                 boat.name, boat.flag, boat.registrationPort, boat.registrationNumber,
-                CrewFieldValidator.iso8601String(trip.departureDate),
-                CrewFieldValidator.iso8601String(trip.returnDate),
+                VoyageDate.iso(trip.departureDate),
+                VoyageDate.iso(trip.returnDate),
+                skipperEmail,
+                row.isClient ? "yes" : "no",
             ].map(csv).joined(separator: ","))
         }
         // RFC 4180 line endings, and a BOM so Excel opens UTF-8 without mangling
@@ -69,22 +103,25 @@ enum ExportService {
             Column(title: "FULL NAME", width: name) { $0.fullName },
             Column(title: "PASSPORT NO", width: number) { $0.documentNumber },
             Column(title: "NATIONALITY", width: nationality) { $0.nationality },
-            Column(title: "BIRTHDAY", width: birthday) { $0.birthDate },
+            // As the passport prints it. The CSV beside this file keeps the ISO
+            // form, so nothing machine-readable is lost by making this legible.
+            Column(title: "BIRTHDAY", width: birthday) { $0.printedBirthDate },
             Column(title: "SEX", width: totalWidth - name - number - nationality - birthday) { $0.sex },
         ]
     }
 
-    static func exportPDF(to url: URL, trip: Trip, boat: Boat, rows: [CrewListRow]) throws {
+    static func exportPDF(to url: URL, trip: Trip, boat: Boat, rows: [CrewListRow], skipperEmail: String = "") throws {
         var box = CGRect(origin: .zero, size: pageSize)
         guard let context = CGContext(url as CFURL, mediaBox: &box, nil) else { throw CocoaError(.fileWriteUnknown) }
 
         let skippers = rows.filter { $0.role == .skipper }
         let passengers = rows.filter { $0.role == .passenger }
 
-        var page = Page(context: context, trip: trip, boat: boat)
+        var page = Page(context: context, trip: trip, boat: boat, skipperEmail: skipperEmail)
         page.begin(pageNumber: 1, pageCount: nil)
         page.drawSection(title: "SKIPPER", rows: skippers.isEmpty ? [CrewListRow.blank] : skippers)
         page.drawSection(title: "PASSENGERS", rows: passengers)
+        page.drawClientSignature(client: rows.first(where: \.isClient))
         page.finish()
 
         context.closePDF()
@@ -97,13 +134,15 @@ enum ExportService {
         let context: CGContext
         let trip: Trip
         let boat: Boat
+        let skipperEmail: String
         private var y: CGFloat = 0
         private var pageNumber = 0
 
-        init(context: CGContext, trip: Trip, boat: Boat) {
+        init(context: CGContext, trip: Trip, boat: Boat, skipperEmail: String = "") {
             self.context = context
             self.trip = trip
             self.boat = boat
+            self.skipperEmail = skipperEmail
         }
 
         var contentWidth: CGFloat { pageSize.width - margin * 2 }
@@ -132,7 +171,7 @@ enum ExportService {
         private mutating func drawTitle() {
             y -= 22
             draw("CREW LIST", at: CGPoint(x: margin, y: y), size: 17, bold: true)
-            let dates = "\(CrewFieldValidator.iso8601String(trip.departureDate))  –  \(CrewFieldValidator.iso8601String(trip.returnDate))"
+            let dates = "\(VoyageDate.printed(trip.departureDate))  –  \(VoyageDate.printed(trip.returnDate))"
             draw(dates, at: CGPoint(x: margin + 130, y: y + 3), size: 10)
             y -= 14
         }
@@ -152,7 +191,15 @@ enum ExportService {
                 draw(entry.0, at: CGPoint(x: rect.minX + 4, y: rect.maxY - 11), size: 6.5, bold: true)
                 draw(fitted(entry.1, width: width - 8, size: 10), at: CGPoint(x: rect.minX + 4, y: rect.minY + 6), size: 10)
             }
-            y -= 18
+            // Under the boxes rather than in one: it is how to reach a person,
+            // not a property of the vessel, and a port authority reads the four
+            // registration facts as a set. The gap below the boxes is the same
+            // either way, so a trip with no address on it is not a form with a
+            // hole in it.
+            guard !skipperEmail.isEmpty else { y -= 18; return }
+            y -= 14
+            draw("SKIPPER EMAIL  \(skipperEmail)", at: CGPoint(x: margin, y: y), size: 8, gray: 0.25)
+            y -= 16
         }
 
         mutating func drawSection(title: String, rows: [CrewListRow]) {
@@ -160,20 +207,64 @@ enum ExportService {
             if y < margin + rowHeight * 3 { breakPage() }
             draw(title, at: CGPoint(x: margin, y: y), size: 9, bold: true)
             y -= 6
-            drawRowLine(cells: ExportService.columns(totalWidth: contentWidth).map(\.title), bold: true)
+            drawRowLine(cells: ExportService.columns(totalWidth: contentWidth).map(\.title), style: .heading)
             for row in rows {
                 if y < margin + rowHeight * 2 {
                     breakPage()
                     draw("\(title) (continued)", at: CGPoint(x: margin, y: y), size: 9, bold: true)
                     y -= 6
-                    drawRowLine(cells: ExportService.columns(totalWidth: contentWidth).map(\.title), bold: true)
+                    drawRowLine(cells: ExportService.columns(totalWidth: contentWidth).map(\.title), style: .heading)
                 }
-                drawRowLine(cells: ExportService.columns(totalWidth: contentWidth).map { $0.key(row) }, bold: false)
+                // The client's row is set in bold rather than tagged with a
+                // word: the name column is already the one that truncates, and
+                // a "(CLIENT)" suffix would be the first thing cut off a long
+                // name. Who they are is spelled out under CLIENT below anyway.
+                drawRowLine(cells: ExportService.columns(totalWidth: contentWidth).map { $0.key(row) },
+                            style: row.isClient ? .client : .crew)
             }
             y -= 12
         }
 
-        private mutating func drawRowLine(cells: [String], bold: Bool) {
+        /// The line the client signs.
+        ///
+        /// Printed whether or not anyone has been named, for the same reason
+        /// the SKIPPER section is: a port official expects the block to be on
+        /// the form, and a form that grows a new section only sometimes is a
+        /// form nobody trusts they have all of.
+        mutating func drawClientSignature(client: CrewListRow?) {
+            if y < margin + rowHeight * 3 { breakPage() }
+            draw("CLIENT — SIGNS FOR THIS CHARTER", at: CGPoint(x: margin, y: y), size: 9, bold: true)
+            y -= 22
+
+            let nameWidth: CGFloat = 200
+            draw(fitted(client?.fullName ?? "", width: nameWidth, size: 10),
+                 at: CGPoint(x: margin, y: y + 4), size: 10)
+
+            // A ruled line to sign on, not an empty box: it says where the pen
+            // goes without claiming the signature is a field this app holds.
+            let lineStart = margin + nameWidth + 20
+            context.setStrokeColor(NSColor.black.cgColor)
+            context.setLineWidth(0.5)
+            context.move(to: CGPoint(x: lineStart, y: y))
+            context.addLine(to: CGPoint(x: pageSize.width - margin, y: y))
+            context.strokePath()
+
+            draw("NAME", at: CGPoint(x: margin, y: y - 10), size: 6.5, bold: true, gray: 0.45)
+            draw("SIGNATURE", at: CGPoint(x: lineStart, y: y - 10), size: 6.5, bold: true, gray: 0.45)
+            y -= 22
+        }
+
+        /// How one line of the table is set. The client's row is emphasised at
+        /// the body size rather than at the heading's, so bold never means two
+        /// different things on the same page.
+        private enum RowStyle {
+            case heading, crew, client
+
+            var size: CGFloat { self == .heading ? 7 : 9 }
+            var bold: Bool { self != .crew }
+        }
+
+        private mutating func drawRowLine(cells: [String], style: RowStyle) {
             y -= rowHeight
             var x = margin
             for (column, value) in zip(ExportService.columns(totalWidth: contentWidth), cells) {
@@ -181,8 +272,8 @@ enum ExportService {
                 context.setStrokeColor(NSColor.black.cgColor)
                 context.setLineWidth(0.5)
                 context.stroke(rect)
-                draw(fitted(value, width: column.width - 8, size: bold ? 7 : 9),
-                     at: CGPoint(x: x + 4, y: y + 6), size: bold ? 7 : 9, bold: bold)
+                draw(fitted(value, width: column.width - 8, size: style.size),
+                     at: CGPoint(x: x + 4, y: y + 6), size: style.size, bold: style.bold)
                 x += column.width
             }
         }

@@ -18,12 +18,28 @@ enum RiskLevel: String, Codable, CaseIterable {
     }
 }
 
+/// One yacht in the operator's fleet.
+///
+/// Always a record of its own, joined to a charter by `Trip.boatID` — what
+/// changed is that an operator can now make one, reuse it across seasons and
+/// see the ones they have, instead of retyping a name into every new trip.
+/// The four values here are the four boxes printed across the top of a crew
+/// list, which is why editing them on a trip edits the vessel everywhere.
 struct Boat: Codable, Identifiable, Hashable {
     var id = UUID()
     var name: String
     var flag: String = ""
     var registrationPort: String = ""
     var registrationNumber: String = ""
+
+    /// Out of the fleet, still on its own past charters.
+    ///
+    /// Retiring is not deleting, for the same reason archiving a trip is not:
+    /// a yacht sold in October is still the yacht named on August's crew list,
+    /// and a port authority can ask about that long after it left the fleet.
+    /// `CrewStore.deleteBoat` is the other half of the pair, and it refuses
+    /// while any trip still points here.
+    var isRetired: Bool = false
 
     /// A boat is only printable on a crew list once it has a real name.
     var isComplete: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && name != Self.placeholderName }
@@ -45,6 +61,10 @@ extension Boat {
         flag = (try? container.decode(String.self, forKey: .flag)) ?? ""
         registrationPort = (try? container.decode(String.self, forKey: .registrationPort)) ?? ""
         registrationNumber = (try? container.decode(String.self, forKey: .registrationNumber)) ?? ""
+        // In the fleet is the safe direction: a yacht that reads as retired
+        // when it is not simply disappears from the picker, and an operator
+        // cannot tell why.
+        isRetired = (try? container.decode(Bool.self, forKey: .isRetired)) ?? false
     }
 }
 
@@ -285,6 +305,25 @@ struct CrewAssignment: Codable, Identifiable, Hashable {
     var personID: UUID
     var role: CrewRole = .passenger
     var notes: String = ""
+
+    /// The one person on this trip who signs the papers.
+    ///
+    /// Deliberately not a third `CrewRole`. The client is whoever chartered the
+    /// yacht and they are aboard as either the skipper or a passenger — a role
+    /// case would force a choice between the two facts and lose one of them.
+    /// Exactly one assignment per trip carries this; `CrewStore.setClient`
+    /// is what keeps that true.
+    var isClient: Bool = false
+
+    /// Reachable by email. Only the skipper's is asked for or printed: it is
+    /// the address a port authority or charter base writes to about the vessel,
+    /// and collecting an address for every passenger would be collecting
+    /// personal data nothing on the crew list needs.
+    ///
+    /// Held on the assignment rather than on the person, so it follows the
+    /// skippering of *this* trip — naming a new skipper brings their address
+    /// with them instead of leaving the old one on the form.
+    var email: String = ""
 }
 
 extension CrewAssignment {
@@ -299,6 +338,14 @@ extension CrewAssignment {
         personID = try container.decode(UUID.self, forKey: .personID)
         role = (try? container.decode(CrewRole.self, forKey: .role)) ?? .passenger
         notes = (try? container.decode(String.self, forKey: .notes)) ?? ""
+        // Both added after operators had real data on disk. `try?` covers the
+        // key simply not being there — Swift's synthesised decoding would throw
+        // `keyNotFound` and take the assignment with it. Not being the client
+        // is the safe direction: an unnamed signatory is a blank line on the
+        // form, a wrongly named one is a signature attributed to the wrong
+        // person.
+        isClient = (try? container.decode(Bool.self, forKey: .isClient)) ?? false
+        email = (try? container.decode(String.self, forKey: .email)) ?? ""
     }
 }
 
@@ -316,8 +363,17 @@ struct CrewListRow: Hashable, Identifiable, Sendable {
     var sex: String
     var expiryDate: String
     var role: CrewRole
+    var isClient: Bool
 
-    init(document: CrewDocument, role: CrewRole) {
+    /// The birth date as the passport itself prints it — `16 DEC 1984`. The
+    /// stored value stays ISO-8601, which is what the CSV and every validation
+    /// rule read; only what a person looks at changes.
+    ///
+    /// No expiry equivalent: the expiry is not a column on the printed form and
+    /// stays ISO in the CSV, so there would be nothing to read it.
+    var printedBirthDate: String { DocumentDate.display(birthDate) }
+
+    init(document: CrewDocument, role: CrewRole, isClient: Bool = false) {
         fullName = document[.fullName]
         documentNumber = document[.documentNumber]
         nationality = document[.nationality]
@@ -325,6 +381,7 @@ struct CrewListRow: Hashable, Identifiable, Sendable {
         sex = document[.sex]
         expiryDate = document[.expiryDate]
         self.role = role
+        self.isClient = isClient
     }
 }
 
@@ -338,6 +395,10 @@ struct AppData: Codable {
     var documents: [CrewDocument] = []
     var assignments: [CrewAssignment] = []
 
+    /// The operator's defaults. Held here rather than in `UserDefaults` so a
+    /// restored snapshot restores the settings that produced it.
+    var settings = AppSettings()
+
     /// Records this read could not decode, one line each.
     ///
     /// Not persisted, and deliberately not silent. Salvaging a collection means
@@ -347,21 +408,25 @@ struct AppData: Codable {
     /// about data the next save has already rewritten.
     var decodingLosses: [String] = []
 
-    static let currentSchemaVersion = 2
+    /// 3 added `settings` and `Boat.isRetired`; both decode from an older
+    /// payload as their defaults, so the bump records the change rather than
+    /// gating it.
+    static let currentSchemaVersion = 3
 
     /// Only the persisted properties. Declared explicitly so `decodingLosses`
     /// is never written to disk.
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, boats, trips, people, documents, assignments
+        case schemaVersion, boats, trips, people, documents, assignments, settings
     }
 
-    init(schemaVersion: Int = AppData.currentSchemaVersion, boats: [Boat] = [], trips: [Trip] = [], people: [CrewPerson] = [], documents: [CrewDocument] = [], assignments: [CrewAssignment] = []) {
+    init(schemaVersion: Int = AppData.currentSchemaVersion, boats: [Boat] = [], trips: [Trip] = [], people: [CrewPerson] = [], documents: [CrewDocument] = [], assignments: [CrewAssignment] = [], settings: AppSettings = AppSettings()) {
         self.schemaVersion = schemaVersion
         self.boats = boats
         self.trips = trips
         self.people = people
         self.documents = documents
         self.assignments = assignments
+        self.settings = settings
     }
 
     /// A payload written before versioning decodes as version 1.
@@ -380,6 +445,12 @@ struct AppData: Codable {
         people = Self.salvage(from: container, forKey: .people, describing: "person", into: &losses)
         documents = Self.salvage(from: container, forKey: .documents, describing: "document", into: &losses)
         assignments = Self.salvage(from: container, forKey: .assignments, describing: "crew assignment", into: &losses)
+        // Not salvaged into `losses`: unreadable settings cost the operator a
+        // handful of preferences they can set again in a minute, which is not
+        // the same kind of loss as a passport that has left a trip, and saying
+        // "some records could not be read" about it would be alarming and
+        // wrong.
+        settings = (try? container.decode(AppSettings.self, forKey: .settings)) ?? AppSettings()
         decodingLosses = losses
     }
 

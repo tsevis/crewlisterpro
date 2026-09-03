@@ -5,6 +5,34 @@ import XCTest
 /// Tests for the app's scriptable export entry point.
 final class HeadlessExportTests: XCTestCase {
 
+    private func intent(_ arguments: String...) -> HeadlessExport.Intent {
+        HeadlessExport.intent(["CrewListrProMac"] + arguments)
+    }
+
+    // MARK: - What an unrecognised flag does
+    //
+    // It used to open a window. On a machine with no display, or in a script,
+    // that is a hang — and `--help` did it too, so the one thing a person types
+    // to find out how to use this was the one thing that told them nothing.
+
+    func testHelpPrintsUsageRatherThanOpeningAWindow() {
+        XCTAssertEqual(intent("--help"), .usage(exitCode: 0))
+        XCTAssertEqual(intent("-h"), .usage(exitCode: 0))
+    }
+
+    func testAnUnrecognisedLongFlagIsRefusedRatherThanOpeningAWindow() {
+        XCTAssertEqual(intent("--exprot", "/tmp/out"), .usage(exitCode: 2))
+        XCTAssertEqual(intent("--list", "--nonsense"), .usage(exitCode: 2))
+    }
+
+    /// macOS passes these when the app is launched from the Finder or Xcode.
+    /// They are not typos, and refusing them would stop the app opening at all.
+    func testTheArgumentsMacOSAddsStillOpenTheWindow() {
+        XCTAssertEqual(intent(), .presentWindow)
+        XCTAssertEqual(intent("-psn_0_123456"), .presentWindow)
+        XCTAssertEqual(intent("-NSDocumentRevisionsDebugMode", "YES"), .presentWindow)
+    }
+
     private func parse(_ arguments: String...) -> HeadlessExport.Request? {
         HeadlessExport.parse(["CrewListrProMac"] + arguments)
     }

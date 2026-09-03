@@ -36,7 +36,7 @@ struct CrewListScreen: View {
     private var heading: String {
         guard let boat = store.selectedBoat, let trip = store.selectedTrip else { return "No trip selected" }
         let name = boat.name.isEmpty ? "Untitled yacht" : boat.name
-        return "\(name) · \(boat.flag.isEmpty ? "no flag" : boat.flag) · \(CrewFieldValidator.iso8601String(trip.departureDate)) → \(CrewFieldValidator.iso8601String(trip.returnDate))"
+        return "\(name) · \(boat.flag.isEmpty ? "no flag" : boat.flag) · \(VoyageDate.printed(trip.departureDate)) → \(VoyageDate.printed(trip.returnDate))"
     }
 
     /// `.batch-metrics`
@@ -47,6 +47,11 @@ struct CrewListScreen: View {
                 value: "\(rows.filter { $0.role == .skipper }.count)",
                 label: "Skipper",
                 tint: rows.contains { $0.role == .skipper } ? Theme.accentText : Theme.caution
+            )
+            PhilonMetric(
+                value: rows.contains(where: \.isClient) ? "1" : "—",
+                label: "Client",
+                tint: rows.contains(where: \.isClient) ? Theme.accentText : Theme.inkTertiary
             )
             PhilonMetric(value: "2", label: "Files written (CSV, PDF)")
         }
@@ -62,10 +67,19 @@ struct CrewListScreen: View {
                     .foregroundStyle(row.role == .skipper ? Theme.accentText : Theme.inkSecondary)
             }
             .width(90)
+            // Its own column rather than a suffix on the role: the client is a
+            // second fact about the person, and a passenger who signs reads as
+            // neither "Passenger" nor "Client" alone.
+            TableColumn("Client") { row in
+                Text(row.isClient ? "Signs" : "")
+                    .font(Theme.Font.supportEmphasis)
+                    .foregroundStyle(Theme.accentText)
+            }
+            .width(56)
             TableColumn("Full name") { Text($0.fullName).font(Theme.Font.support).foregroundStyle(Theme.ink) }
             TableColumn("Passport no.") { Text($0.documentNumber).font(Theme.Font.monoMeta) }.width(120)
             TableColumn("Nationality") { Text($0.nationality).font(Theme.Font.support) }.width(120)
-            TableColumn("Birthday") { Text($0.birthDate).font(Theme.Font.monoMeta) }.width(104)
+            TableColumn("Birthday") { Text($0.printedBirthDate).font(Theme.Font.monoMeta) }.width(104)
             TableColumn("Sex") { Text($0.sex).font(Theme.Font.support) }.width(44)
         })
         // Without this the inset style stripes every row slot in the panel,
@@ -100,6 +114,22 @@ struct ExportButton: View {
     @Environment(CrewStore.self) private var store
     @State private var exported: URL?
 
+    /// Names what will be written and where, so the operator is never guessing
+    /// which of the two it is about to do.
+    private var exportLabel: String {
+        guard let folder = store.standingExportFolder else {
+            return "Export \(store.settings.exportFilesDescription)…"
+        }
+        return "Export to \(folder.lastPathComponent)"
+    }
+
+    private var exportHelp: String {
+        guard let folder = store.standingExportFolder else {
+            return "Write \(store.settings.exportDescription) into a folder you choose"
+        }
+        return "Write \(store.settings.exportDescription) into \(folder.path(percentEncoded: false)) — set in Settings. Right-click to choose a different folder."
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             if let exported {
@@ -113,33 +143,48 @@ struct ExportButton: View {
             }
 
             Button {
-                export()
+                export(askingForFolder: false)
             } label: {
-                Label("Export CSV and PDF…", systemImage: "square.and.arrow.up")
+                Label(exportLabel, systemImage: "square.and.arrow.up")
             }
             .buttonStyle(.philonPrimary)
             .disabled(!store.exportBlockers.isEmpty)
-            .help(store.exportBlockers.isEmpty
-                  ? "Write the crew list beside a folder you choose"
-                  : store.exportBlockers.joined(separator: "\n"))
+            .help(store.exportBlockers.isEmpty ? exportHelp : store.exportBlockers.joined(separator: "\n"))
+            // Only when a standing folder would otherwise decide for them. With
+            // none set the primary button already asks, and a second control
+            // saying the same thing invites the question of how they differ.
+            .contextMenu {
+                if store.standingExportFolder != nil {
+                    Button("Export To…") { export(askingForFolder: true) }
+                }
+            }
         }
     }
 
-    private func export() {
+    /// The folder set in Settings, or the one the operator picks now.
+    private func export(askingForFolder: Bool) {
+        guard let directory = askingForFolder ? chooseFolder() : (store.standingExportFolder ?? chooseFolder()) else { return }
+        do {
+            let written = try store.exportSelectedTrip(to: directory)
+            exported = directory
+            if store.settings.revealsAfterExport, !written.isEmpty {
+                NSWorkspace.shared.activateFileViewerSelecting(written)
+            }
+        } catch {
+            store.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func chooseFolder() -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
         panel.prompt = "Export Here"
-        panel.message = "Choose the folder for the crew list CSV and PDF."
+        panel.message = "Choose the folder for \(store.settings.exportDescription)."
         // A directory picker, not a save panel whose filename was then thrown
         // away in favour of its parent directory.
-        guard panel.runModal() == .OK, let directory = panel.url else { return }
-        do {
-            try store.exportSelectedTrip(to: directory)
-            exported = directory
-        } catch {
-            store.errorMessage = error.localizedDescription
-        }
+        guard panel.runModal() == .OK else { return nil }
+        return panel.url
     }
 }

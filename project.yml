@@ -1,0 +1,87 @@
+# The Xcode project exists for one reason: XCUITest.
+#
+# A Swift package cannot host a UI-testing bundle, and UI tests are the only
+# way to press a control this app actually has — nearly every button here uses
+# a custom ButtonStyle, so SwiftUI draws it and there is no NSButton for an
+# in-process test to send an action to (see InteractionHarness for how far that
+# gets, and where it stops).
+#
+# `Package.swift` remains the source of truth for building and shipping the
+# app: `swift build -c release` and `scripts/release.sh` are untouched, and this
+# project compiles exactly the same files rather than a copy of them. Generated
+# from this spec by `scripts/uitest.sh` and not committed, so there is no second
+# project file to keep in step by hand.
+name: CrewListrPro
+
+options:
+  bundleIdPrefix: com.tsevis
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    # The system sqlcipher, wrapped by the same module map SwiftPM uses. One
+    # module map, so the two build systems cannot disagree about the shim.
+    SWIFT_INCLUDE_PATHS: $(SRCROOT)/Sources/CSQLCipher
+    # SQLCipher's own sqlite3.h, which is the one that declares `sqlite3_key`.
+    # The plain sqlite3.h a level above it does not, and picking that up fails
+    # at the one call that matters. `scripts/uitest.sh` fills the prefix in from
+    # `brew --prefix`, the same way `scripts/release.sh` does, so no Cellar
+    # version is written down anywhere.
+    HEADER_SEARCH_PATHS: $(SRCROOT)/Sources/CSQLCipher ${SQLCIPHER_PREFIX}/include/sqlcipher
+    LIBRARY_SEARCH_PATHS: ${SQLCIPHER_PREFIX}/lib
+    OTHER_LDFLAGS: -lsqlcipher
+
+targets:
+  CrewListrPro:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/CrewListrProMac
+      - path: Resources
+        buildPhase: resources
+    settings:
+      base:
+        # Deliberately NOT the shipping identifier. A UI test installs and
+        # launches this build; sharing an identifier with the app in
+        # /Applications is what makes LaunchServices answer a launch with the
+        # wrong copy, and that has already cost this project a week once.
+        PRODUCT_BUNDLE_IDENTIFIER: com.tsevis.crewlistrpro.uitest
+        PRODUCT_NAME: CrewListr Pro UITest
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.business
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: YES
+        CODE_SIGNING_ALLOWED: YES
+        ENABLE_HARDENED_RUNTIME: NO
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+
+  CrewListrProUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: Tests/UITests
+    dependencies:
+      - target: CrewListrPro
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tsevis.crewlistrpro.uitests
+        TEST_TARGET_NAME: CrewListrPro
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+
+schemes:
+  CrewListrPro:
+    build:
+      targets:
+        CrewListrPro: all
+        CrewListrProUITests: [test]
+    test:
+      targets:
+        - CrewListrProUITests

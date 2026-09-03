@@ -248,7 +248,7 @@ final class CrewListGenerationTests: XCTestCase {
         }
         for extraction in exportable {
             let expiry = extraction.document[.expiryDate]
-            XCTAssertGreaterThan(expiry, CrewFieldValidator.iso8601String(voyage.arrival),
+            XCTAssertGreaterThan(expiry, VoyageDate.iso(voyage.arrival),
                                  "\(extraction.document.documentNumber) expires before the voyage ends")
         }
 
