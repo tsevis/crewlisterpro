@@ -223,6 +223,46 @@ variable is set — they touch real identity documents or the live encrypted sto
 swift test --enable-code-coverage
 ```
 
+### Clicking the app
+
+`swift test` covers everything except a click. Nearly every button here uses a
+custom `ButtonStyle`, so SwiftUI draws it and there is no `NSButton` for an
+in-process test to press — and the one control AppKit does back, the client
+checkbox, has no action to send, while a synthetic `mouseDown` on it hangs
+waiting for a mouse-up from an event queue no `NSApplication` is running.
+`InteractionTests` gets as far as that allows: it types into the real field
+editors and leaves them, which is the whole commit-on-blur path.
+
+The rest needs XCUITest, and a Swift package cannot host a UI-testing bundle.
+So `scripts/uitest.sh` generates a small Xcode project from `project.yml` over
+the *same* sources — no copy, no second target list to keep in step — and drives
+the built app:
+
+```bash
+./scripts/uitest.sh
+```
+
+`Package.swift` remains the source of truth: `swift build -c release` and
+`scripts/release.sh` do not know this project exists, and the generated
+`.xcodeproj` is not committed.
+
+Unlike the rest of the suite, this one is not silent and cannot be. XCUITest
+synthesises real keyboard and mouse events on the desktop it runs on: the app
+opens, takes focus over whatever is in front of it, and is clicked. Anything
+that steals focus mid-run can land a click somewhere unintended, so leave the
+machine alone while it runs — and it is deliberately not part of `swift test`
+for that reason.
+
+Two things make it safe to run. The app under test takes a different bundle
+identifier from the shipping one, so LaunchServices cannot answer a launch with
+the copy in `/Applications`. And `CREWLISTR_STORE_ROOT` — honoured only in a
+debug build — points it at a throwaway store, because the real binary keeps the
+operator's trips, their sealed passport scans and its own encryption key under
+one directory, and a test that clicks "Delete Trip and Documents" against that
+directory deletes a real charter. `CREWLISTR_SEED=demo`, also debug-only, fills
+an empty store with a fictional fleet, since the controls worth clicking only
+exist once a trip has documents on it.
+
 Opt-in switches:
 
 ```bash

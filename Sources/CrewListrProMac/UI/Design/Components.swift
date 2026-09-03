@@ -419,6 +419,9 @@ struct PhilonMetric: View {
 /// Three near-identical copies of this existed, one per screen. They drifted:
 /// one of them forgot to put the trimmed value back in the box.
 struct CommitField: View {
+    /// A stable name for a UI test to find this field by. Optional, because
+    /// most fields are reachable by position within their own panel.
+    var identifier: String?
     let placeholder: String
     let value: String
     var isSuspect = false
@@ -455,6 +458,7 @@ struct CommitField: View {
             // overwrite what the operator is in the middle of typing.
             .onChange(of: value) { _, newValue in if !focused { draft = newValue } }
             .onAppear { draft = value }
+            .accessibilityIdentifier(identifier ?? "")
     }
 
     private var border: Color {

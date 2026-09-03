@@ -113,6 +113,10 @@ final class CrewStore {
         defer { isOpening = false }
         do {
             data = try await secureStore.load()
+            #if DEBUG
+            // Only ever onto an empty store, and only when asked. See DebugSeed.
+            if let seeded = DebugSeed.seeded(onto: data) { data = seeded }
+            #endif
             hasLoaded = true
             applyStorageSettings()
             reportDecodingLosses()

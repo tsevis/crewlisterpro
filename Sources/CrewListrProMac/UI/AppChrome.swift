@@ -137,6 +137,11 @@ private struct ScreenTab: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
+        // A stable name for a UI test to click. Matching tabs by their visible
+        // label instead broke on the crew-list count beside them: an element
+        // whose label is a number makes the whole query throw rather than skip
+        // it, and every query on the window fails with it.
+        .accessibilityIdentifier("screen.\(screen.rawValue)")
     }
 }
 

@@ -189,6 +189,7 @@ struct RootView: View {
                 Label("Add Yacht", systemImage: "plus")
             }
             .buttonStyle(.philonPrimary)
+            .accessibilityIdentifier("fleet.addInCommandBar")
             .help("Add a yacht to the fleet")
         } trailing: {
             // Not offered for a retired yacht: `chosenBoatForNewTrip` will not

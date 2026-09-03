@@ -99,6 +99,7 @@ struct FieldReviewPane: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .accessibilityIdentifier("review.role")
 
             Text("A crew list needs exactly one skipper; naming a new one demotes the previous.")
                 .font(Theme.Font.meta)
@@ -128,6 +129,7 @@ struct FieldReviewPane: View {
                     .foregroundStyle(Theme.ink)
             }
             .toggleStyle(.checkbox)
+            .accessibilityIdentifier("review.client")
 
             Text("One person per trip. Naming a new client clears the previous one.")
                 .font(Theme.Font.meta)
@@ -145,6 +147,7 @@ struct FieldReviewPane: View {
             Eyebrow(text: "Skipper's email")
 
             CommitField(
+                identifier: "review.skipperEmail",
                 placeholder: "skipper@example.com",
                 value: value,
                 isSuspect: validation.message != nil,
@@ -304,6 +307,7 @@ private struct FieldRow: View {
                   : (isVerified ? "Confirmed against the document image" : "Confirm this matches the document image"))
             .accessibilityLabel("\(field.label) confirmed")
             .accessibilityAddTraits(isVerified ? [.isSelected] : [])
+            .accessibilityIdentifier("review.confirm.\(field.rawValue)")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)

@@ -72,6 +72,7 @@ struct FleetDetail: View {
     ) -> some View {
         FormRow(label: label) {
             CommitField(
+                identifier: "fleet.field.\(label.lowercased().replacingOccurrences(of: " ", with: "-"))",
                 placeholder: placeholder,
                 value: boat[keyPath: keyPath],
                 normalise: uppercased ? { $0.uppercased() } : { $0 }
@@ -181,14 +182,17 @@ struct FleetDetail: View {
             HStack(spacing: 8) {
                 Button("Duplicate", systemImage: "plus.square.on.square", action: onDuplicate)
                     .buttonStyle(.philonQuiet)
+                    .accessibilityIdentifier("fleet.duplicate")
                     .help("A sister ship: everything but the name and the registration number")
 
                 if boat.isRetired {
                     Button("Return to Fleet", systemImage: "arrow.uturn.backward", action: onRestore)
                         .buttonStyle(.philonSecondary)
+                        .accessibilityIdentifier("fleet.restore")
                 } else {
                     Button("Retire", systemImage: "archivebox", action: onRetire)
                         .buttonStyle(.philonQuiet)
+                        .accessibilityIdentifier("fleet.retire")
                         .help("Out of the fleet, still named on its past crew lists")
                 }
 
@@ -196,6 +200,7 @@ struct FleetDetail: View {
 
                 Button("Delete…", systemImage: "trash", role: .destructive, action: onDelete)
                     .buttonStyle(.philonQuiet(role: .destructive))
+                    .accessibilityIdentifier("fleet.delete")
                     .disabled(trips > 0)
                     .help(trips > 0
                           ? "\(trips) trip\(trips == 1 ? " uses" : "s use") this yacht. Retire it instead, or delete those trips first."

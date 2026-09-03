@@ -60,14 +60,46 @@ actor SecureStore {
     /// the sealed originals and the snapshots. Exposed so Settings can show the
     /// operator the folder rather than describing it.
     nonisolated static func dataFolder(fileManager: FileManager = .default) -> URL? {
-        try? fileManager
+        if let redirected = Self.redirectedRoot() { return redirected }
+        return try? fileManager
             .url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
             .appending(path: "CrewListrPro", directoryHint: .isDirectory)
     }
 
+    /// The environment variable name a UI test sets to point this app at a
+    /// throwaway store.
+    static let rootOverrideVariable = "CREWLISTR_STORE_ROOT"
+
+    /// A store somewhere other than the operator's own.
+    ///
+    /// A UI test drives the real application binary, and the real binary keeps
+    /// its database, its key, its sealed passport scans and its snapshots under
+    /// one directory in Application Support. Without a way to move that, a UI
+    /// test would click "Delete Trip and Documents" on the operator's actual
+    /// charter. So the root can be redirected — and only in a debug build,
+    /// which is what `xcodebuild test` builds and what the shipped disk image
+    /// never is.
+    ///
+    /// This reveals nothing: a fresh root gets a fresh key and an empty
+    /// database, so redirecting it is a way to make the app ignore the
+    /// operator's data, never a way to read it.
+    private nonisolated static func redirectedRoot() -> URL? {
+        #if DEBUG
+        guard let path = ProcessInfo.processInfo.environment[rootOverrideVariable], !path.isEmpty else { return nil }
+        return URL(fileURLWithPath: path, isDirectory: true)
+        #else
+        return nil
+        #endif
+    }
+
     init(fileManager: FileManager = .default) throws {
-        let support = try fileManager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let root = support.appending(path: "CrewListrPro", directoryHint: .isDirectory)
+        let root: URL
+        if let redirected = Self.redirectedRoot() {
+            root = redirected
+        } else {
+            let support = try fileManager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            root = support.appending(path: "CrewListrPro", directoryHint: .isDirectory)
+        }
         documentsURL = root.appending(path: "documents", directoryHint: .isDirectory)
         backupsURL = root.appending(path: "backups", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: documentsURL, withIntermediateDirectories: true)

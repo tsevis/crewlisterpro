@@ -31,6 +31,7 @@ struct FleetScreen: View {
                 ) {
                     Button("Add a Yacht") { add() }
                         .buttonStyle(.philonPrimary)
+                        .accessibilityIdentifier("fleet.add")
                 }
                 .frame(maxWidth: .infinity)
             } else {
