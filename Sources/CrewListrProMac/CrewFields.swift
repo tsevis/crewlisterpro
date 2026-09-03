@@ -168,7 +168,18 @@ enum CrewFieldValidator {
             if trimmed.contains(" ") { return .warning("Contains a space.") }
             return .valid
         case .nationality:
-            return trimmed.count < 2 ? .invalid("Use a country name or 3-letter code.") : .valid
+            if trimmed.count < 2 { return .invalid("Use a country name or 3-letter code.") }
+            // No country code and no country's name contains a digit, so one
+            // here is the camera's, not the document's. This is the field on
+            // the machine-readable zone that no check digit covers, so nothing
+            // upstream catches it: ROU came through as R0U and UTO as UT0, and
+            // "two characters or more" waved both onto a crew list. `MRZ`
+            // repairs the shapes it can be sure of; this refuses the rest
+            // rather than let one be confirmed by accident.
+            if let digit = trimmed.first(where: \.isNumber) {
+                return .invalid("\"\(digit)\" is a digit — a nationality has none. Check it against the document.")
+            }
+            return .valid
         case .sex:
             return ["M", "F", "X"].contains(trimmed.uppercased()) ? .valid : .invalid("Use M, F or X.")
         case .documentType:

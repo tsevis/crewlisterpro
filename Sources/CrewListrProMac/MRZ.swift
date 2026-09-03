@@ -25,8 +25,15 @@ enum MRZ {
 
             // Names come from the preceding line when it is recognisable. When
             // it is not, everything line 2 knows is still worth keeping.
-            let state = fields["nationality"]
             let candidates = [index > 0 ? lines[index - 1] : nil, index + 1 < lines.count ? lines[index + 1] : nil]
+
+            // Line 1 carries the same three letters at positions 3 to 5, so a
+            // state that came off line 2 with a digit in it has a second,
+            // independent reading to be settled against.
+            let fromLine1 = candidates.compactMap { $0 }.compactMap(Self.issuingState).first
+            let state = repairedStateCode(second.state, issuingState: fromLine1)
+            fields["nationality"] = nationality(state)
+
             if let name = candidates.compactMap({ $0.flatMap { Self.names($0, issuedBy: state) } }).first {
                 fields["full_name"] = name
             }
@@ -39,6 +46,14 @@ enum MRZ {
     /// A parsed, self-consistent TD3 second line.
     private struct Line2 {
         let fields: [String: String]
+        /// The issuing state exactly as it was read, before repair.
+        ///
+        /// Held apart because it is the one field on this line no check digit
+        /// covers — the composite spans the document number, the birth date and
+        /// the expiry date, and skips positions 11 to 13 entirely. Everything
+        /// else here has arithmetic behind it; this has nothing, so it is the
+        /// one value that can be wrong without the line failing to parse.
+        let state: String
 
         init?(_ line: String) {
             let characters = Array(line)
@@ -61,9 +76,9 @@ enum MRZ {
                   let expiryDate = MRZ.date(expiry, kind: .expiry) else { return nil }
 
             let sex = characters[20]
+            state = String(characters[10..<13])
             fields = [
                 "document_number": number,
-                "nationality": MRZ.nationality(String(characters[10..<13])),
                 "birth_date": birthDate,
                 "expiry_date": expiryDate,
                 "sex": ["M", "F"].contains(sex) ? String(sex) : "X",
@@ -121,6 +136,43 @@ enum MRZ {
             return 5
         }
         return 0
+    }
+
+    /// The issuing state as line 1 gives it, when line 1 gives it cleanly.
+    static func issuingState(_ line: String) -> String? {
+        let characters = Array(line)
+        guard characters.count > 5, characters[1] == "<", characters[0].isLetter else { return nil }
+        let state = String(characters[2..<5])
+        return state.allSatisfy(\.isLetter) ? state : nil
+    }
+
+    /// A three-letter country code with the camera's digits taken back out.
+    ///
+    /// Only letters and fillers are legal in this field, so a digit is always a
+    /// misread — but knowing that is not the same as knowing which letter it
+    /// was, and the two are treated differently here.
+    ///
+    /// Line 1 is asked first: it holds the same three letters, so two readings
+    /// that agree everywhere except where one has a digit settle the question
+    /// outright, with no appeal to what looks like what.
+    ///
+    /// Failing that, only the shapes OCR-B genuinely confuses are substituted.
+    /// A 1 is not among them: it is an I or an L and nothing about the shape
+    /// says which, so it is left in place for the operator — and validation now
+    /// refuses a nationality with a digit in it, so what is left cannot be
+    /// confirmed by accident.
+    static func repairedStateCode(_ raw: String, issuingState: String?) -> String {
+        guard raw.contains(where: \.isNumber) else { return raw }
+
+        // Two readings of the same three letters, differing only where one of
+        // them saw a digit.
+        if let issuingState, issuingState.count == raw.count,
+           zip(raw, issuingState).allSatisfy({ $0.isNumber || $0 == $1 }) {
+            return issuingState
+        }
+
+        let unmistakable: [Character: Character] = ["0": "O", "2": "Z", "5": "S", "6": "G", "8": "B"]
+        return String(raw.map { unmistakable[$0] ?? $0 })
     }
 
     /// The best name among several readings of the same line.
