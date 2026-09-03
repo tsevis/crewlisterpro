@@ -2,7 +2,7 @@
 
 <img src="docs/icon-masked.png" alt="CrewListr Pro" width="128">
 
-**Offline crew-list preparation for charter yachts.** Version 0.1.11 · macOS 15+ · Apple Silicon
+**Offline crew-list preparation for charter yachts.** Version 0.2.0 · macOS 15+ · Apple Silicon
 
 CrewListr Pro turns photographed or scanned identity documents into the crew list a port
 authority expects. Extraction runs entirely on this Mac using Vision OCR and ICAO 9303
