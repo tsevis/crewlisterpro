@@ -1,6 +1,28 @@
 #!/bin/zsh
 # Runs the XCUITest suite: the clicks an in-process test cannot reach.
 #
+# ── READ THIS BEFORE RUNNING ─────────────────────────────────────────────────
+#
+# This is not a test run you can work through. XCUITest has no sandbox: it
+# synthesises real mouse and keyboard events on the desktop it runs on, seizes
+# focus from whatever is in front, and inspects other applications' windows as
+# it goes.
+#
+# On this machine that has quit other running applications — repeatedly and
+# reproducibly, including the editor the run was started from, taking the
+# session and any unsaved work with it. The failures it reported ("no window
+# appeared") were the same instability seen from the inside.
+#
+# So it asks first, and an automated caller has to say so out loud:
+#
+#     CREWLISTR_UITEST_CONFIRM=1 ./scripts/uitest.sh
+#
+# Run it when you have walked away from the Mac, and not before. If you are an
+# agent working on this repository: do not set that variable on your own
+# initiative. Ask, and let the person decide when their machine is free.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+#
 # A Swift package cannot host a UI-testing bundle, so this generates a small
 # Xcode project from project.yml, builds the same sources into an app, and
 # drives it. `Package.swift` stays the source of truth for shipping — nothing
@@ -12,6 +34,24 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+
+if [[ "${CREWLISTR_UITEST_CONFIRM:-}" != "1" ]]; then
+  cat >&2 <<'WARNING'
+scripts/uitest.sh drives the real desktop and can quit other running apps.
+
+It synthesises mouse and keyboard events, takes focus, and has been observed
+quitting unrelated applications on this machine — including the one it was
+launched from. It is not safe to run while you are using the Mac.
+
+When the machine is free:
+
+    CREWLISTR_UITEST_CONFIRM=1 ./scripts/uitest.sh
+
+Everything else — 493 tests, including the in-process interaction tests that
+type into the real fields — runs silently under `swift test`.
+WARNING
+  exit 2
+fi
 
 if ! command -v xcodegen >/dev/null; then
   echo "xcodegen is required: brew install xcodegen" >&2

@@ -254,19 +254,24 @@ the *same* sources — no copy, no second target list to keep in step — and dr
 the built app:
 
 ```bash
-./scripts/uitest.sh
+CREWLISTR_UITEST_CONFIRM=1 ./scripts/uitest.sh
 ```
+
+**Walk away from the Mac before running it.** XCUITest has no sandbox. It
+synthesises real mouse and keyboard events on the desktop it runs on, seizes
+focus from whatever is in front, and inspects other applications' windows as it
+goes. In practice that has quit unrelated running applications — repeatedly and
+reproducibly, including the editor the run was started from, taking the session
+and any unsaved work with it. The suite's own "no window appeared" failures were
+the same instability seen from the inside.
+
+That is why the script refuses to start without `CREWLISTR_UITEST_CONFIRM=1`,
+and why it is not part of `swift test`. An agent working on this repository
+should not set that variable on its own initiative; it should ask.
 
 `Package.swift` remains the source of truth: `swift build -c release` and
 `scripts/release.sh` do not know this project exists, and the generated
 `.xcodeproj` is not committed.
-
-Unlike the rest of the suite, this one is not silent and cannot be. XCUITest
-synthesises real keyboard and mouse events on the desktop it runs on: the app
-opens, takes focus over whatever is in front of it, and is clicked. Anything
-that steals focus mid-run can land a click somewhere unintended, so leave the
-machine alone while it runs — and it is deliberately not part of `swift test`
-for that reason.
 
 Two things make it safe to run. The app under test takes a different bundle
 identifier from the shipping one, so LaunchServices cannot answer a launch with
