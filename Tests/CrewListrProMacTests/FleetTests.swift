@@ -48,12 +48,76 @@ final class FleetTests: XCTestCase {
         XCTAssertEqual(boat.registrationPort, "PIRAEUS")
     }
 
-    func testTheFleetIsListedByName() throws {
+    /// The order is the operator's, not the alphabet's. A fleet was sorted by
+    /// name, which put the boat chartered every week below one taken out twice
+    /// a season and gave nobody a way to change that.
+    func testTheFleetIsListedInTheOrderItWasBuilt() throws {
         let store = try makeStore()
         store.addBoat(named: "S/Y ZEPHYROS")
         store.addBoat(named: "M/Y AURORA")
 
+        XCTAssertEqual(store.fleet.map(\.name), ["S/Y ZEPHYROS", "M/Y AURORA"])
+    }
+
+    /// Dragging a row in the fleet list moves the yacht, and it stays moved.
+    func testAYachtCanBeMovedInTheFleet() throws {
+        let store = try makeStore()
+        store.addBoat(named: "S/Y ZEPHYROS")
+        store.addBoat(named: "M/Y AURORA")
+        store.addBoat(named: "S/Y ELPIDA")
+
+        store.moveFleet(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+
+        XCTAssertEqual(store.fleet.map(\.name), ["S/Y ELPIDA", "S/Y ZEPHYROS", "M/Y AURORA"])
+    }
+
+    /// A retired yacht sits in its own list and must not be dragged out of it,
+    /// or a move within the fleet would silently reorder something else.
+    func testMovingAYachtLeavesTheRetiredOnesWhereTheyAre() throws {
+        let store = try makeStore()
+        let sold = store.addBoat(named: "M/Y OLD")
+        store.retireBoat(sold)
+        store.addBoat(named: "S/Y ZEPHYROS")
+        store.addBoat(named: "M/Y AURORA")
+
+        store.moveFleet(fromOffsets: IndexSet(integer: 1), toOffset: 0)
+
         XCTAssertEqual(store.fleet.map(\.name), ["M/Y AURORA", "S/Y ZEPHYROS"])
+        XCTAssertEqual(store.retiredFleet.map(\.name), ["M/Y OLD"])
+    }
+
+    // MARK: - The operator's own name for a yacht
+
+    /// The name in the header box is the vessel's registered name and a port
+    /// authority reads it. What the operator calls the boat is a different
+    /// fact, and it is the one they scan a list of trips for.
+    func testAYachtCanCarryTheOperatorsOwnNameWithoutChangingWhatPrints() throws {
+        let store = try makeStore()
+        let id = store.addBoat(named: "S/Y ELPIDA II")
+        var boat = try XCTUnwrap(store.boat(withID: id))
+
+        boat.nickname = "The blue one"
+        store.updateBoat(boat)
+
+        let saved = try XCTUnwrap(store.boat(withID: id))
+        XCTAssertEqual(saved.displayName, "The blue one", "the operator's own name is what the app shows")
+        XCTAssertEqual(saved.name, "S/Y ELPIDA II", "the printed name must not have moved")
+    }
+
+    /// With no name of their own, the app shows the registered one — there is
+    /// nothing to fall back to but the paperwork.
+    func testAYachtWithNoNameOfItsOwnShowsTheRegisteredName() throws {
+        let store = try makeStore()
+        let id = store.addBoat(named: "S/Y ELPIDA II")
+
+        XCTAssertEqual(try XCTUnwrap(store.boat(withID: id)).displayName, "S/Y ELPIDA II")
+    }
+
+    func testAnUnnamedYachtStillReadsAsUntitled() throws {
+        let store = try makeStore()
+        let id = store.addBoat()
+
+        XCTAssertEqual(try XCTUnwrap(store.boat(withID: id)).displayName, "Untitled yacht")
     }
 
     /// Sister ships differ by a name and a registration number and agree on

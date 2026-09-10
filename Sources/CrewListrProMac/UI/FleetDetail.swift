@@ -21,7 +21,7 @@ struct FleetDetail: View {
     var body: some View {
         VStack(spacing: 0) {
             PanelHeader(eyebrow: boat.isRetired ? "Retired yacht" : "Yacht",
-                        title: boat.isComplete ? boat.name : "Untitled yacht") {
+                        title: boat.displayName) {
                 if trips > 0 {
                     Text(trips == 1 ? "1 trip" : "\(trips) trips")
                         .font(Theme.Font.meta.monospacedDigit())
@@ -32,6 +32,12 @@ struct FleetDetail: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if boat.isRetired { retiredNote }
+
+                    FormSection(title: "In this app") {
+                        field("Your name for it", placeholder: boat.isComplete ? boat.name : "The blue one", \.nickname)
+                        FormRule()
+                        FormCaption("What the fleet list, the trip strip and the document panel call this yacht. Nothing here is printed — a port authority reads the registered name below. Leave it empty to be shown that name everywhere.")
+                    }
 
                     FormSection(title: "Printed on every crew list") {
                         field("Name", placeholder: "S/Y ELPIDA", \.name)

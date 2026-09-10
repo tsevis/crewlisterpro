@@ -102,7 +102,11 @@ struct FleetScreen: View {
             PanelHeader(eyebrow: "Fleet", title: title)
 
             List(selection: $selection) {
+                // `.onMove` and nothing else: the order in this list is the
+                // order the app uses everywhere, so dragging a row is the
+                // whole of the reordering interface.
                 ForEach(store.fleet) { row($0) }
+                    .onMove { store.moveFleet(fromOffsets: $0, toOffset: $1) }
 
                 if !store.retiredFleet.isEmpty {
                     Section {
@@ -177,17 +181,11 @@ private struct FleetRow: View {
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(boat.isComplete ? boat.name : "Untitled yacht")
-                        .font(Theme.Font.bodyEmphasis)
-                        .foregroundStyle(boat.isComplete ? Theme.ink : Theme.inkSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-
-                    if isDefault {
-                        Tag(text: "DEFAULT")
-                    }
-                }
+                Text(boat.displayName)
+                    .font(Theme.Font.bodyEmphasis)
+                    .foregroundStyle(boat.isComplete || !boat.nickname.isEmpty ? Theme.ink : Theme.inkSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
                 Text(subtitle)
                     .font(Theme.Font.meta)
@@ -206,7 +204,13 @@ private struct FleetRow: View {
     /// What distinguishes one yacht from another at a glance: where it is
     /// registered, and how much of this operator's season it carries.
     private var subtitle: String {
-        let registry = [boat.flag, boat.registrationNumber].filter { !$0.isEmpty }.joined(separator: " · ")
+        // The registered name leads when a nickname is standing in front of
+        // it: the row still has to answer "which vessel is this on paper".
+        let printed = boat.nickname.isEmpty || !boat.isComplete ? nil : boat.name
+        let registry = [printed, boat.flag.isEmpty ? nil : boat.flag,
+                        boat.registrationNumber.isEmpty ? nil : boat.registrationNumber]
+            .compactMap { $0 }
+            .joined(separator: " · ")
         let charters = trips == 0 ? "No trips" : "\(trips) trip\(trips == 1 ? "" : "s")"
         return registry.isEmpty ? charters : "\(registry) · \(charters)"
     }

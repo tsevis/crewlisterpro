@@ -160,13 +160,13 @@ struct TripScreen: View {
                     set: { pickYacht($0) }
                 )) {
                     ForEach(store.fleet) { boat in
-                        Text(boat.isComplete ? boat.name : "Untitled yacht").tag(Optional(boat.id))
+                        Text(boat.displayName).tag(Optional(boat.id))
                     }
                     // A retired yacht is not offered, but a charter already made
                     // for one has to keep saying which yacht it was.
                     if let current = store.selectedBoat, current.isRetired {
                         Divider()
-                        Text("\(current.name) (retired)").tag(Optional(current.id))
+                        Text("\(current.displayName) (retired)").tag(Optional(current.id))
                     }
                 }
                 .labelsHidden()

@@ -32,6 +32,18 @@ struct Boat: Codable, Identifiable, Hashable {
     var registrationPort: String = ""
     var registrationNumber: String = ""
 
+    /// What the operator calls this boat, which is rarely what the registry
+    /// calls it.
+    ///
+    /// Two different facts, and the app had only the first. `name` is the
+    /// vessel's registered name and a port authority reads it out of the crew
+    /// list's header box, so it is not a field anyone can make convenient —
+    /// meanwhile the operator picking a trip out of a row of them is looking
+    /// for "the blue one", not for S/Y ELPIDA II. This is shown everywhere in
+    /// the app; `name` is what prints. Empty means there is nothing to show but
+    /// the paperwork.
+    var nickname: String = ""
+
     /// Out of the fleet, still on its own past charters.
     ///
     /// Retiring is not deleting, for the same reason archiving a trip is not:
@@ -43,6 +55,17 @@ struct Boat: Codable, Identifiable, Hashable {
 
     /// A boat is only printable on a crew list once it has a real name.
     var isComplete: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && name != Self.placeholderName }
+
+    /// What every list, chip and panel header in the app calls this yacht.
+    ///
+    /// One place, so a nickname reaches all of them and nothing has to
+    /// remember the `isComplete ? name : "Untitled yacht"` dance that was
+    /// written out at nine call sites and disagreed at two of them.
+    var displayName: String {
+        let own = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !own.isEmpty { return own }
+        return isComplete ? name : "Untitled yacht"
+    }
 
     static let placeholderName = "NEW YACHT"
 }
@@ -61,6 +84,10 @@ extension Boat {
         flag = (try? container.decode(String.self, forKey: .flag)) ?? ""
         registrationPort = (try? container.decode(String.self, forKey: .registrationPort)) ?? ""
         registrationNumber = (try? container.decode(String.self, forKey: .registrationNumber)) ?? ""
+        // Added after operators had a fleet on disk, so `try?` rather than a
+        // bare decode: an absent key is a yacht nobody has renamed yet, not a
+        // record that fails to load.
+        nickname = (try? container.decode(String.self, forKey: .nickname)) ?? ""
         // In the fleet is the safe direction: a yacht that reads as retired
         // when it is not simply disappears from the picker, and an operator
         // cannot tell why.

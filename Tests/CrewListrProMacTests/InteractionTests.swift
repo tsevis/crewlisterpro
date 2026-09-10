@@ -32,12 +32,28 @@ final class InteractionTests: XCTestCase {
         Harness(FleetDetailProbe(boatID: boatID).environment(store))
     }
 
+    /// The pane's first box is the operator's own name for the boat; the
+    /// registered name a port authority reads follows it. The indices below are
+    /// that order, and they are the reason this suite exists — a field added at
+    /// the top of the form is a field every one of these presses would
+    /// otherwise have silently moved on to.
+    func testTypingYourOwnNameForAYachtSavesItWithoutTouchingTheRegisteredName() throws {
+        let store = makeStore()
+        let id = store.addBoat(named: "S/Y ELPIDA")
+        let harness = fleetHarness(store, boatID: id)
+
+        harness.type("The blue one", intoFieldAt: 0)
+
+        XCTAssertEqual(store.boat(withID: id)?.nickname, "The blue one")
+        XCTAssertEqual(store.boat(withID: id)?.name, "S/Y ELPIDA", "the printed name moved")
+    }
+
     func testTypingAYachtNameAndLeavingTheFieldSavesIt() throws {
         let store = makeStore()
         let id = store.addBoat(named: "S/Y ELPIDA")
         let harness = fleetHarness(store, boatID: id)
 
-        harness.type("S/Y ANEMOS", intoFieldAt: 0)
+        harness.type("S/Y ANEMOS", intoFieldAt: 1)
 
         XCTAssertEqual(store.boat(withID: id)?.name, "S/Y ANEMOS")
     }
@@ -49,10 +65,10 @@ final class InteractionTests: XCTestCase {
         let id = store.addBoat(named: "S/Y ELPIDA")
         let harness = fleetHarness(store, boatID: id)
 
-        harness.type("grc", intoFieldAt: 1)
+        harness.type("grc", intoFieldAt: 2)
 
         XCTAssertEqual(store.boat(withID: id)?.flag, "GRC")
-        XCTAssertEqual(harness.text(ofFieldAt: 1), "GRC")
+        XCTAssertEqual(harness.text(ofFieldAt: 2), "GRC")
     }
 
     /// The bug this harness exists for. `CrewStore.updateBoat` refuses a blank
@@ -64,10 +80,10 @@ final class InteractionTests: XCTestCase {
         let id = store.addBoat(named: "S/Y ELPIDA")
         let harness = fleetHarness(store, boatID: id)
 
-        harness.type("", intoFieldAt: 0)
+        harness.type("", intoFieldAt: 1)
 
         XCTAssertEqual(store.boat(withID: id)?.name, "S/Y ELPIDA", "a blank name must not overwrite a real one")
-        XCTAssertEqual(harness.text(ofFieldAt: 0), "S/Y ELPIDA", "the box is showing a name that was never stored")
+        XCTAssertEqual(harness.text(ofFieldAt: 1), "S/Y ELPIDA", "the box is showing a name that was never stored")
     }
 
     func testWhitespaceTypedAroundAValueIsNotLeftInTheBox() throws {
@@ -75,10 +91,10 @@ final class InteractionTests: XCTestCase {
         let id = store.addBoat(named: "S/Y ELPIDA")
         let harness = fleetHarness(store, boatID: id)
 
-        harness.type("   PIRAEUS   ", intoFieldAt: 2)
+        harness.type("   PIRAEUS   ", intoFieldAt: 3)
 
         XCTAssertEqual(store.boat(withID: id)?.registrationPort, "PIRAEUS")
-        XCTAssertEqual(harness.text(ofFieldAt: 2), "PIRAEUS")
+        XCTAssertEqual(harness.text(ofFieldAt: 3), "PIRAEUS")
     }
 
     // MARK: - Editing a document in the review pane

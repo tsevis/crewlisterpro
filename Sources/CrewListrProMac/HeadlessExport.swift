@@ -233,7 +233,7 @@ enum HeadlessExport {
             // Marked, so `--list` does not present a put-away charter as though
             // it were still being worked on.
             let archived = trip.isArchived ? "  [archived]" : ""
-            log("\(boat?.name ?? "Untitled yacht")  \(dates)  \(cleared)/\(documents.count) cleared\(archived)")
+            log("\(boat?.displayName ?? "Untitled yacht")  \(dates)  \(cleared)/\(documents.count) cleared\(archived)")
         }
     }
 

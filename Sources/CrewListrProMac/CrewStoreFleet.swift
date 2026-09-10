@@ -15,13 +15,34 @@ extension CrewStore {
     // record; what was missing was any way to make one, reuse one, or see the
     // ones you have.
 
-    /// The yachts on offer, by name. Retired ones are listed separately.
-    var fleet: [Boat] {
-        data.boats.filter { !$0.isRetired }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
+    /// The yachts on offer, in the order the operator put them in. Retired ones
+    /// are listed separately.
+    ///
+    /// Not sorted by name any more. An alphabet is a reasonable order for a
+    /// list nobody has an opinion about, and a fleet is not that: the boat
+    /// chartered every week of the season sat below one that goes out twice a
+    /// year because of the letter it starts with, and there was no way to say
+    /// so. The stored order *is* the operator's order — `moveFleet` is how it
+    /// changes.
+    var fleet: [Boat] { data.boats.filter { !$0.isRetired } }
 
-    var retiredFleet: [Boat] {
-        data.boats.filter(\.isRetired).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    var retiredFleet: [Boat] { data.boats.filter(\.isRetired) }
+
+    /// Moves yachts within the fleet, from a drag in the fleet list.
+    ///
+    /// The offsets are positions in `fleet`, which is `data.boats` with the
+    /// retired ones taken out — so they are translated back before anything
+    /// moves. Reordering the filtered list and writing it back wholesale would
+    /// drop every retired yacht in the store.
+    func moveFleet(fromOffsets source: IndexSet, toOffset destination: Int) {
+        var active = fleet
+        guard !active.isEmpty else { return }
+        active.move(fromOffsets: source, toOffset: destination)
+        // The retired ones keep the slots they already occupy; the active ones
+        // are dealt back into the gaps between them, in their new order.
+        var reordered = active.makeIterator()
+        data.boats = data.boats.map { $0.isRetired ? $0 : (reordered.next() ?? $0) }
+        persist()
     }
 
     func boat(withID id: UUID) -> Boat? { data.boats.first { $0.id == id } }

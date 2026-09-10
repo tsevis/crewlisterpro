@@ -82,7 +82,7 @@ struct DocumentColumn: View {
     }
 
     private var title: String {
-        store.selectedBoat.map { $0.name.isEmpty ? "Untitled yacht" : $0.name } ?? "No trip selected"
+        store.selectedBoat?.displayName ?? "No trip selected"
     }
 
     private var cleared: Int {
