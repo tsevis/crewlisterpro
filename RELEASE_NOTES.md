@@ -1,7 +1,6 @@
-# CrewListr Pro 0.3.0 — unreleased
+# CrewListr Pro 0.3.0
 
-Six changes, all from the same operator's use of 0.2.0. The version in
-`Version.swift` is still 0.2.0; bump it when this ships.
+Six changes, all from the same operator's use of 0.2.0.
 
 **Passports can be dragged onto the window.** The file panel and ⌘I still work.
 A dropped folder is opened one level, which is what dragging a WhatsApp export
