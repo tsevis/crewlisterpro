@@ -47,9 +47,17 @@ extension CrewStore {
 
     func boat(withID id: UUID) -> Boat? { data.boats.first { $0.id == id } }
 
-    /// How many charters name this yacht. What stands between it and deletion.
+    /// How many charters name this yacht. What the delete dialog counts.
     func tripCount(forBoatID id: UUID) -> Int {
         data.trips.count { $0.boatID == id }
+    }
+
+    /// How many identity documents would be erased with this yacht. Deleting a
+    /// yacht destroys passport scans, so the confirmation has to say how many
+    /// rather than leave the operator to work it out per trip.
+    func documentCount(forBoatID id: UUID) -> Int {
+        let trips = Set(data.trips.filter { $0.boatID == id }.map(\.id))
+        return data.documents.count { trips.contains($0.tripID) }
     }
 
     /// Adds a yacht, pre-filled from the fleet defaults. Most operators' whole
@@ -97,18 +105,26 @@ extension CrewStore {
         persist()
     }
 
-    /// Removes a yacht from the fleet for good. Refuses, and reports so, while
-    /// any charter still names it: the four header boxes of those crew lists
-    /// are read off this record.
+    /// Removes a yacht from the fleet for good, and its charters with it.
+    ///
+    /// This used to refuse while any trip named the vessel, on the reasoning
+    /// that the four header boxes of those crew lists are read off this record.
+    /// The reasoning holds; the refusal did not. An operator was left with a
+    /// yacht they could not remove, a message counting trips they could not
+    /// find, and a fleet that only ever grew — which is not a safeguard, it is
+    /// a dead end. Deleting now does what the word says: the trips go, and with
+    /// them their documents, people, assignments and every encrypted original
+    /// on disk. `FleetScreen`'s confirmation counts all of it first, and
+    /// `retireBoat` is still the answer for a sold yacht whose past charters
+    /// have to stay.
     @discardableResult
     func deleteBoat(_ id: UUID) -> Bool {
-        guard tripCount(forBoatID: id) == 0 else {
-            errorMessage = "\(boat(withID: id)?.name ?? "This yacht") is used by \(tripCount(forBoatID: id)) trip(s). Delete or archive those first, or retire the yacht instead — a retired yacht keeps its past crew lists."
-            return false
-        }
         guard data.boats.contains(where: { $0.id == id }) else { return false }
+        // Through `deleteTrip`, deliberately: it is the one place that shreds
+        // the encrypted originals, and a second implementation here would be a
+        // second chance to forget them.
+        for trip in data.trips.filter({ $0.boatID == id }) { deleteTrip(trip.id) }
         data.boats.removeAll { $0.id == id }
-        if data.settings.defaultBoatID == id { data.settings.defaultBoatID = nil }
         persist()
         return true
     }

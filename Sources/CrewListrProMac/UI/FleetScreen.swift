@@ -76,16 +76,27 @@ struct FleetScreen: View {
 
     private var selected: Boat? { selection.flatMap(store.boat(withID:)) }
 
-    /// Says what will actually happen. The dialog used to assert "No trip uses
-    /// it" for whatever yacht was right-clicked, including one carrying six
-    /// charters — a destructive confirmation stating something false.
+    /// Says what will actually happen, counted rather than asserted.
+    ///
+    /// Deleting a yacht now takes its charters and their passport scans with
+    /// it, so this is the last thing between an operator and erased identity
+    /// documents. It names the numbers, and it names Retire — which is what
+    /// most people reaching for Delete on a sold yacht actually want.
     private var deletionMessage: String {
         guard let boat = pendingDeletion else { return "" }
         let trips = store.tripCount(forBoatID: boat.id)
-        guard trips == 0 else {
-            return "\(boat.name) is used by \(trips) trip\(trips == 1 ? "" : "s") and cannot be deleted. Retire it instead: a retired yacht leaves the fleet and keeps its past crew lists."
+        guard trips > 0 else {
+            return "\(boat.displayName) is removed from the fleet. No trip uses it, so no crew list changes."
         }
-        return "\(boat.name) is removed from the fleet. No trip uses it, so no crew list changes. To take a yacht out of the fleet while keeping its past charters, retire it instead."
+        let documents = store.documentCount(forBoatID: boat.id)
+        let scans = documents == 0
+            ? "no documents"
+            : "\(documents) encrypted document\(documents == 1 ? "" : "s")"
+        return """
+        \(boat.displayName) is removed from the fleet, and so are the \(trips) trip\(trips == 1 ? "" : "s") made for it and their \(scans). The passport scans are erased from this Mac and cannot be recovered.
+
+        To take a yacht out of the fleet while keeping its past charters, retire it instead.
+        """
     }
 
     private func add() {
@@ -153,7 +164,6 @@ struct FleetScreen: View {
                 Button("Retire") { store.retireBoat(boat.id) }
             }
             Button("Delete…", role: .destructive) { pendingDeletion = boat }
-                .disabled(store.tripCount(forBoatID: boat.id) > 0)
         }
     }
 

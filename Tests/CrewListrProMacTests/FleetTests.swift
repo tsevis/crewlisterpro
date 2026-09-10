@@ -167,15 +167,58 @@ final class FleetTests: XCTestCase {
         XCTAssertEqual(store.fleet.map(\.id), [id])
     }
 
-    /// The crew list's header boxes are read off this record. Deleting it out
-    /// from under a trip would leave a charter that cannot say what it sailed.
-    func testAYachtInUseCannotBeDeleted() throws {
+    /// Deleting a yacht takes its charters with it.
+    ///
+    /// This used to refuse while any trip named the vessel, on the reasoning
+    /// that a crew list's header boxes are read off this record. True, and it
+    /// left an operator with a boat they could not remove and no way to find
+    /// out which trips were holding it — the fleet filled up with yachts
+    /// nobody could delete. Retire is still there for a sold yacht whose past
+    /// charters matter; Delete now means delete, and the dialog counts what
+    /// goes before it happens.
+    func testDeletingAYachtTakesItsTripsWithIt() throws {
         let store = try makeStore()
         let id = store.addBoat(named: "S/Y ELPIDA")
-        store.createTrip(boatID: id)
+        let kept = store.addBoat(named: "M/Y AURORA")
+        let doomed = store.createTrip(boatID: id)
+        let survivor = store.createTrip(boatID: kept)
 
-        XCTAssertFalse(store.deleteBoat(id))
-        XCTAssertNotNil(store.boat(withID: id))
+        XCTAssertTrue(store.deleteBoat(id))
+
+        XCTAssertNil(store.boat(withID: id))
+        XCTAssertNil(store.data.trips.first { $0.id == doomed }, "the charter outlived its yacht")
+        XCTAssertNotNil(store.data.trips.first { $0.id == survivor }, "another yacht's charter was taken too")
+    }
+
+    /// The documents on those trips are identity documents, so deleting a
+    /// yacht has to erase them rather than orphan them in the database.
+    func testDeletingAYachtErasesTheDocumentsOnItsTrips() throws {
+        let store = try makeStore()
+        let id = store.addBoat(named: "S/Y ELPIDA")
+        let trip = store.createTrip(boatID: id)
+        var document = CrewDocument(tripID: trip, personID: UUID(), originalName: "a.jpeg", encryptedFileName: "")
+        document[.fullName] = "YUKI NAKAMURA"
+        store.data.documents.append(document)
+        store.data.people.append(CrewPerson(id: document.personID, fullName: "YUKI NAKAMURA"))
+        store.data.assignments.append(CrewAssignment(tripID: trip, personID: document.personID, role: .skipper))
+
+        XCTAssertEqual(store.documentCount(forBoatID: id), 1, "the dialog could not count what it was about to erase")
+        XCTAssertTrue(store.deleteBoat(id))
+
+        XCTAssertTrue(store.data.documents.isEmpty)
+        XCTAssertTrue(store.data.people.isEmpty)
+        XCTAssertTrue(store.data.assignments.isEmpty)
+    }
+
+    /// Retiring stays the non-destructive half of the pair.
+    func testRetiringAYachtKeepsItsTrips() throws {
+        let store = try makeStore()
+        let id = store.addBoat(named: "S/Y ELPIDA")
+        let trip = store.createTrip(boatID: id)
+
+        store.retireBoat(id)
+
+        XCTAssertNotNil(store.data.trips.first { $0.id == trip })
     }
 
     func testAYachtNoTripUsesCanBeDeleted() throws {
@@ -331,17 +374,6 @@ final class FleetTests: XCTestCase {
 
         store.retireBoat(id)
 
-        XCTAssertNil(store.settings.defaultBoatID)
-    }
-
-    func testDeletingTheDefaultYachtClearsTheDefault() throws {
-        let store = try makeStore()
-        let id = store.addBoat(named: "S/Y ELPIDA")
-        var settings = store.settings
-        settings.defaultBoatID = id
-        store.updateSettings(settings)
-
-        XCTAssertTrue(store.deleteBoat(id))
         XCTAssertNil(store.settings.defaultBoatID)
     }
 

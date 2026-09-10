@@ -204,12 +204,15 @@ struct FleetDetail: View {
 
                 Spacer(minLength: 8)
 
+                // Never disabled any more. A Delete that refuses is a fleet
+                // that only grows; what stands in the way now is a
+                // confirmation that counts the trips and the passport scans
+                // it is about to erase.
                 Button("Delete…", systemImage: "trash", role: .destructive, action: onDelete)
                     .buttonStyle(.philonQuiet(role: .destructive))
                     .accessibilityIdentifier("fleet.delete")
-                    .disabled(trips > 0)
                     .help(trips > 0
-                          ? "\(trips) trip\(trips == 1 ? " uses" : "s use") this yacht. Retire it instead, or delete those trips first."
+                          ? "Erases this yacht, its \(trips) trip\(trips == 1 ? "" : "s") and their documents. Retire it instead to keep those crew lists."
                           : "No trip uses this yacht")
             }
         }
