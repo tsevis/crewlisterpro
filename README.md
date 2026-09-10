@@ -91,9 +91,13 @@ sends anything anywhere: no server, no account, no sync.
 Three columns follow the operator's actual sequence — **choose a trip, pick a document,
 check it against its own image.**
 
-- **Trips** are a horizontal strip of yachts across the command line — every charter and its
-  cleared-count readable at once, rather than one name with the rest behind a dropdown. A new
-  trip already runs Saturday to Saturday; moving the departure moves the return with it.
+- **Trips** are a horizontal strip of *charter days* across the command line, earliest first —
+  a date is what a base plans around, and four boats going out on the same Saturday are one
+  morning's work rather than four unrelated charters. A day with one trip opens it; a day with
+  several drops down the boats leaving that day, each with its cleared-count. A new trip
+  already runs Saturday to Saturday; moving the departure moves the return with it.
+- **Importing** is a file panel, ⌘I, or dragging the photos straight onto the window —
+  a folder of scans included, one level deep, images and PDFs only.
 - **Documents** show the status the *operator* has reached, not what a check digit guessed.
   A freshly imported passport reads "Awaiting review" even when its MRZ is perfect.
 - **Review** puts the decrypted document image beside its extracted fields. Every field is

@@ -230,7 +230,7 @@ struct RootView: View {
             }
             .buttonStyle(.philonQuiet)
             .disabled(store.selectedTripID == nil)
-            .help("Add passport photos or scans (⌘I)")
+            .help("Add passport photos or scans (⌘I) — or drag them onto the window")
         } trailing: {
             if let document = store.selectedDocument {
                 Button {
@@ -299,6 +299,18 @@ private struct PeopleScreen: View {
     @Binding var importing: Bool
 
     var body: some View {
+        grid
+            // The whole working area takes a drop, not a strip of it: someone
+            // dragging a passport onto the window aims at the document they can
+            // see, which is as likely to be the preview or the review pane as
+            // the list. `importDocuments` says so itself when no trip is
+            // selected, so the drop is never silently swallowed.
+            .documentDrop { urls in
+                Task { await store.importDocuments(urls) }
+            }
+    }
+
+    private var grid: some View {
         DocumentGrid {
             DocumentColumn(importing: $importing)
                 .frame(minWidth: 230, idealWidth: 270, maxWidth: 300)

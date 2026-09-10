@@ -101,7 +101,7 @@ struct DocumentColumn: View {
             PhilonEmptyState(
                 symbol: "doc.text.viewfinder",
                 title: "No documents",
-                message: "Import a photo or scan of each crew member's passport. Everything stays encrypted on this Mac."
+                message: "Drag each crew member's passport onto this window, or import the photos and scans below. Everything stays encrypted on this Mac."
             ) {
                 Button("Import Documents…") { importing = true }
                     .buttonStyle(.philonPrimary)
