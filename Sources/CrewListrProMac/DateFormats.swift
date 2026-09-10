@@ -55,6 +55,28 @@ enum VoyageDate {
         DocumentDate.display(iso(date, calendar: calendar))
     }
 
+    /// `SAT 12 SEP` — short enough for a chip in a row of them.
+    ///
+    /// Leads with the weekday because that is what this trade plans by: a
+    /// charter base thinks in Saturdays, and the number beside it is only there
+    /// to say which one. The year is deliberately absent — a strip of dates is
+    /// read at a glance and every one of them is this season — so anything
+    /// showing this must have the full date to hand as well; `TripStrip` puts
+    /// `printed` in the chip's tooltip.
+    ///
+    /// English and fixed, like `DocumentDate`'s months: the same operator reads
+    /// both, and a crew list printed in one language with a strip labelled in
+    /// another is worse than either.
+    static func short(_ date: Date, calendar: Calendar = .current) -> String {
+        let pinned = gregorian(in: calendar)
+        let parts = pinned.dateComponents([.weekday, .day, .month], from: date)
+        guard let weekday = parts.weekday, let day = parts.day, let month = parts.month,
+              (1...7).contains(weekday), (1...12).contains(month) else { return printed(date, calendar: calendar) }
+        let days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+        let months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+        return "\(days[weekday - 1]) \(day) \(months[month - 1])"
+    }
+
     /// Stripped to the start of its day, which is the only part of a voyage
     /// date that means anything. A trip stored at 14:37 crosses a day boundary
     /// the moment anyone reads it from another time zone.

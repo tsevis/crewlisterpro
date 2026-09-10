@@ -225,7 +225,10 @@ enum HeadlessExport {
     // MARK: - Steps
 
     private static func printSummary(of data: AppData) {
-        for trip in data.trips {
+        // In departure order, like the strip in the window. A list of charters
+        // is read as a calendar whether it is printed in a terminal or drawn
+        // in a row of chips.
+        for trip in data.trips.sorted(by: { $0.departureDate < $1.departureDate }) {
             let boat = data.boats.first { $0.id == trip.boatID }
             let documents = data.documents.filter { $0.tripID == trip.id }
             let cleared = documents.filter { $0.canExport() }.count

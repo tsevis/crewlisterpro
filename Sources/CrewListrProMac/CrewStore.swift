@@ -179,6 +179,13 @@ final class CrewStore {
     /// The trips the picker offers: everything not put away.
     var activeTrips: [Trip] { data.trips.filter { !$0.isArchived } }
 
+    /// Every charter gathered into the day it sails on, earliest first.
+    ///
+    /// Archived trips included: they keep their place in the strip, or their
+    /// documents could be neither restored nor erased. `TripDay.isArchived`
+    /// is how a day of nothing but put-away charters says so.
+    var tripDays: [TripDay] { TripCalendar.days(of: data.trips) }
+
     /// Finished charters, kept for the record. Listed separately rather than
     /// hidden outright — a trip nothing can reach is a trip whose documents can
     /// never be restored or erased.
