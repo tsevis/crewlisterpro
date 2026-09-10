@@ -16,7 +16,6 @@ struct FleetDetail: View {
     let onDelete: () -> Void
 
     private var trips: Int { store.tripCount(forBoatID: boat.id) }
-    private var isDefault: Bool { store.settings.defaultBoatID == boat.id }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,7 +49,6 @@ struct FleetDetail: View {
                     }
 
                     preview
-                    useForNewTrips
                     actions
                 }
                 .frame(maxWidth: 620, alignment: .leading)
@@ -142,37 +140,7 @@ struct FleetDetail: View {
         }
     }
 
-    // MARK: - Defaults and actions
-
-    private var useForNewTrips: some View {
-        FormSection(title: "New trips") {
-            FormRow(label: "Default", labelWidth: 118) {
-                Toggle(isOn: Binding(
-                    get: { isDefault },
-                    set: { setDefault($0) }
-                )) {
-                    Text("New trips are for this yacht")
-                        .font(Theme.Font.support)
-                        .foregroundStyle(Theme.ink)
-                }
-                .toggleStyle(.checkbox)
-                .disabled(boat.isRetired)
-            }
-            FormRule()
-            // Says what actually happens rather than what the checkbox is
-            // called. Without a default a new trip takes the yacht last
-            // chartered, which the old wording did not mention at all.
-            FormCaption(isDefault
-                ? "Every new trip is for this yacht until another is made the default. A retired yacht is never chosen, and retiring the default clears it."
-                : "With no default set, a new trip is for the yacht last chartered. A retired yacht is never chosen.")
-        }
-    }
-
-    private func setDefault(_ wanted: Bool) {
-        var settings = store.settings
-        settings.defaultBoatID = wanted ? boat.id : nil
-        store.updateSettings(settings)
-    }
+    // MARK: - Actions
 
     private var retiredNote: some View {
         PhilonNote(

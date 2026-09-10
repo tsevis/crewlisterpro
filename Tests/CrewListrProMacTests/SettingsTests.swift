@@ -271,7 +271,7 @@ final class SettingsTests: XCTestCase {
     /// The hand-written decoder is load-bearing and easy to lose: `AppData`
     /// wraps it in `try?`, so if a future field used a bare `decode` the whole
     /// blob would throw, be replaced with defaults, and the next save would
-    /// write those over the operator's export folder, prefix, default yacht and
+    /// write those over the operator's export folder, prefix and
     /// version depth — silently. A payload holding one key proves each field
     /// falls back on its own rather than the object failing as a whole.
     func testAPartialSettingsPayloadKeepsWhatItHasAndDefaultsTheRest() throws {
@@ -285,7 +285,6 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(data.settings.versionsKept, AppSettings.defaultVersionsKept)
         XCTAssertEqual(data.settings.fileNamePrefix, AppSettings.defaultFileNamePrefix)
         XCTAssertTrue(data.settings.writesPDF)
-        XCTAssertNil(data.settings.defaultBoatID)
     }
 
     /// Out-of-range values in a hand-edited or half-written payload are brought

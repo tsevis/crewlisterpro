@@ -24,11 +24,6 @@ struct AppSettings: Codable, Hashable, Sendable {
     /// How long a new charter runs. A week, unless this fleet does otherwise.
     var charterLengthDays: Int = 7
 
-    /// The yacht a new trip is for when none is named. Cleared automatically if
-    /// that yacht is retired or deleted, so it can never point at a boat the
-    /// picker no longer offers.
-    var defaultBoatID: UUID?
-
     // MARK: - New yachts
 
     /// Filled into a new fleet entry. Most operators' whole fleet flies one flag
@@ -136,7 +131,6 @@ extension AppSettings {
         var decoded = AppSettings()
         decoded.charterStartWeekday = (try? container.decode(Int.self, forKey: .charterStartWeekday)) ?? decoded.charterStartWeekday
         decoded.charterLengthDays = (try? container.decode(Int.self, forKey: .charterLengthDays)) ?? decoded.charterLengthDays
-        decoded.defaultBoatID = try? container.decodeIfPresent(UUID.self, forKey: .defaultBoatID)
         decoded.defaultFlag = (try? container.decode(String.self, forKey: .defaultFlag)) ?? ""
         decoded.defaultRegistrationPort = (try? container.decode(String.self, forKey: .defaultRegistrationPort)) ?? ""
         decoded.fileNamePrefix = (try? container.decode(String.self, forKey: .fileNamePrefix)) ?? Self.defaultFileNamePrefix

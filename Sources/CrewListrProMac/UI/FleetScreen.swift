@@ -146,7 +146,6 @@ struct FleetScreen: View {
         FleetRow(
             boat: boat,
             trips: store.tripCount(forBoatID: boat.id),
-            isDefault: store.settings.defaultBoatID == boat.id,
             isSelected: selection == boat.id
         )
         .tag(boat.id)
@@ -154,8 +153,6 @@ struct FleetScreen: View {
         .listRowBackground(Color.clear)
         .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
         .contextMenu {
-            Button("Use for New Trips") { setDefault(boat.id) }
-                .disabled(boat.isRetired || store.settings.defaultBoatID == boat.id)
             Button("Duplicate") { selection = store.duplicateBoat(boat.id) }
             Divider()
             if boat.isRetired {
@@ -166,12 +163,6 @@ struct FleetScreen: View {
             Button("Delete…", role: .destructive) { pendingDeletion = boat }
         }
     }
-
-    private func setDefault(_ id: UUID?) {
-        var settings = store.settings
-        settings.defaultBoatID = id
-        store.updateSettings(settings)
-    }
 }
 
 // MARK: - One yacht in the list
@@ -179,7 +170,6 @@ struct FleetScreen: View {
 private struct FleetRow: View {
     let boat: Boat
     let trips: Int
-    let isDefault: Bool
     let isSelected: Bool
 
     var body: some View {
@@ -223,21 +213,5 @@ private struct FleetRow: View {
             .joined(separator: " · ")
         let charters = trips == 0 ? "No trips" : "\(trips) trip\(trips == 1 ? "" : "s")"
         return registry.isEmpty ? charters : "\(registry) · \(charters)"
-    }
-}
-
-/// A small uppercase marker. Used where a row needs one word of status that is
-/// not worth a whole column.
-private struct Tag: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(Theme.Font.eyebrow)
-            .tracking(0.4)
-            .foregroundStyle(Theme.accentText)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.thumbnail))
     }
 }

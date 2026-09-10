@@ -210,19 +210,20 @@ final class CrewStore {
 
     /// Which yacht an unnamed new trip is for.
     ///
-    /// The default, then the one most recently chartered, then the first in the
-    /// fleet — and a placeholder ONLY when the fleet is empty. That last rule is
-    /// the important one: minting a "NEW YACHT" while three real ones sit in the
+    /// The one most recently chartered, then the first in the fleet — and a
+    /// placeholder ONLY when the fleet is empty. That last rule is the
+    /// important one: minting a "NEW YACHT" while three real ones sit in the
     /// fleet gave the operator a charter for a vessel they do not own and a
     /// fourth row in their fleet list, once per ⌘N, and nothing could remove it
     /// while the trip existed.
     ///
+    /// There is deliberately no default yacht to consult first. It was a
+    /// setting, a checkbox in the Fleet, a context-menu item and a badge, all
+    /// to answer a question the last charter already answers better.
+    ///
     /// Appends to the fleet as a side effect in that last case, which is why
     /// this is not a computed property.
     private func chosenBoatForNewTrip() -> UUID {
-        if let preferred = settings.defaultBoatID, let boat = boat(withID: preferred), !boat.isRetired {
-            return preferred
-        }
         // The yacht this operator was last working with is a far better guess
         // than the alphabetically first one.
         if let recent = data.trips.last?.boatID, let boat = boat(withID: recent), !boat.isRetired {

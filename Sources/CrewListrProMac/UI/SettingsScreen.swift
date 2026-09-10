@@ -105,22 +105,6 @@ struct SettingsScreen: View {
 
             FormRule()
 
-            FormRow(label: "Yacht") {
-                Picker("Yacht", selection: Binding(
-                    get: { settings.defaultBoatID },
-                    set: { id in edit { $0.defaultBoatID = id } }
-                )) {
-                    Text(store.fleet.count == 1 ? "The only yacht in the fleet" : "Ask each time").tag(UUID?.none)
-                    ForEach(store.fleet) { boat in
-                        Text(boat.isComplete ? boat.name : "Untitled yacht").tag(Optional(boat.id))
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 260)
-            }
-
-            FormRule()
-
             FormCaption("A new trip opens on the next \(AppSettings.weekdayName(settings.charterStartWeekday)) — \(nextDeparture) — and returns \(settings.charterLengthDays) day\(settings.charterLengthDays == 1 ? "" : "s") later. Charters in this trade run Saturday to Saturday, which is what an untouched install does.")
         }
     }

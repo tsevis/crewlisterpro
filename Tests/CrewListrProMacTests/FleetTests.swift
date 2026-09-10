@@ -262,19 +262,6 @@ final class FleetTests: XCTestCase {
         XCTAssertEqual(store.data.trips.first { $0.id == trip }?.boatID, id)
     }
 
-    func testANewTripUsesTheDefaultYachtWhenNoneIsNamed() throws {
-        let store = try makeStore()
-        store.addBoat(named: "M/Y AURORA")
-        let elpida = store.addBoat(named: "S/Y ELPIDA")
-        var settings = store.settings
-        settings.defaultBoatID = elpida
-        store.updateSettings(settings)
-
-        let trip = store.createTrip()
-
-        XCTAssertEqual(store.data.trips.first { $0.id == trip }?.boatID, elpida)
-    }
-
     /// One yacht in the fleet is not a choice; asking would be ceremony.
     func testANewTripUsesTheOnlyYachtInTheFleet() throws {
         let store = try makeStore()
@@ -347,34 +334,6 @@ final class FleetTests: XCTestCase {
 
         let boatID = try XCTUnwrap(store.data.trips.first { $0.id == trip }?.boatID)
         XCTAssertNotNil(store.boat(withID: boatID))
-    }
-
-    func testARetiredDefaultYachtIsNotUsedForANewTrip() throws {
-        let store = try makeStore()
-        let retired = store.addBoat(named: "S/Y ELPIDA")
-        let active = store.addBoat(named: "M/Y AURORA")
-        var settings = store.settings
-        settings.defaultBoatID = retired
-        store.updateSettings(settings)
-        store.retireBoat(retired)
-
-        let trip = store.createTrip()
-
-        XCTAssertEqual(store.data.trips.first { $0.id == trip }?.boatID, active)
-    }
-
-    /// Retiring the default clears it rather than leaving a setting pointing at
-    /// a yacht the picker no longer offers.
-    func testRetiringTheDefaultYachtClearsTheDefault() throws {
-        let store = try makeStore()
-        let id = store.addBoat(named: "S/Y ELPIDA")
-        var settings = store.settings
-        settings.defaultBoatID = id
-        store.updateSettings(settings)
-
-        store.retireBoat(id)
-
-        XCTAssertNil(store.settings.defaultBoatID)
     }
 
     // MARK: - Backward compatibility

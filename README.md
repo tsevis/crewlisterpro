@@ -31,19 +31,49 @@ the wrong registration number.
 - **Add, duplicate, retire, delete.** Duplicating gives you a sister ship:
   everything but the name and the registration number. Retiring takes a sold
   yacht out of the picker while leaving it named on its past crew lists — a
-  charter can be queried long after it sailed. A yacht any trip still uses cannot
-  be deleted, and the button says which trips.
+  charter can be queried long after it sailed. Deleting means deleting: the
+  yacht goes, and so do its trips and their encrypted documents, counted in the
+  confirmation before anything happens.
+- **Your own name for a boat.** The registered name is what a port authority
+  reads out of the header box; "the blue one" is what you call it. Both are
+  kept, and the app shows yours everywhere while printing theirs.
+- **The order is yours.** Drag a yacht up the list. The boat you charter every
+  week does not belong below one that goes out twice a season because of the
+  letter it starts with.
 - **A preview of the header boxes**, showing exactly what those four values will
   print as, with a warning when one would print blank.
-- Trips pick a yacht from the fleet. One yacht in the fleet is not a choice, so
-  it is used without asking; set a default in Settings when there are several.
+- Trips pick a yacht from the fleet. A new trip is for the yacht you chartered
+  last, which is a better guess than any setting — there is deliberately no
+  default yacht to keep in step with a fleet that changes.
+
+## The crew library
+
+The same skippers sail all season. Every charter used to ask for the same
+passport again — the photograph, the upload, the seven fields — and then erased
+it along with the trip it belonged to, so the work was not merely repeated, it
+was repeated from nothing.
+
+The library is where a person outlives a charter. Confirm a passport once, choose
+**Keep in Crew Library**, and their confirmed details and a copy of their scan
+are kept in a folder of the library's own, untouched when the trip is deleted.
+Putting them on the next charter takes one button.
+
+What it deliberately does **not** do is skip the review. Someone added from the
+library arrives with their document attached and every field waiting to be
+confirmed, exactly as an imported one does, and the pane says when those values
+were last confirmed. The saving is the upload, not the checking — a crew list is
+still a document a person has looked at.
+
+Removing someone erases the library's copy of their scan. An app that holds
+passport photographs has to be able to forget them, and the library is a second
+place they are held.
 
 ## Settings
 
 ![Settings](docs/screenshots/04-settings.png)
 
 Defaults for this Mac, grouped by the moment each one applies: when a trip is
-made (charter start day and length, which yacht), when a yacht is added (flag and
+made (charter start day and length), when a yacht is added (flag and
 port of registry, since most fleets share both), what an export writes (CSV, PDF
 or both; the file-name prefix; a standing folder or ask-each-time; reveal
 afterwards), the optional local model, and how many earlier versions of the

@@ -99,9 +99,6 @@ extension CrewStore {
         guard let index = data.boats.firstIndex(where: { $0.id == id }),
               data.boats[index].isRetired != retired else { return }
         data.boats[index].isRetired = retired
-        // A default the picker no longer offers is a setting that silently does
-        // nothing. Clear it rather than leave it pointing into the retired list.
-        if retired, data.settings.defaultBoatID == id { data.settings.defaultBoatID = nil }
         persist()
     }
 
