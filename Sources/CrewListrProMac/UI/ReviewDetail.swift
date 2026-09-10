@@ -45,6 +45,7 @@ struct FieldReviewPane: View {
                     .philonInset(radius: Theme.Radius.panel)
 
                     rolePicker
+                    crewLibrary
                     extractionNotes
                 }
                 .padding(.horizontal, 14)
@@ -160,6 +161,40 @@ struct FieldReviewPane: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 6)
+    }
+
+    /// Keeps this person for the next charter, scan and all.
+    ///
+    /// Here rather than only in a context menu because this is the moment it
+    /// makes sense: the operator has just finished confirming these seven
+    /// fields against that image, and the offer to never do it again for this
+    /// person belongs at the end of that work.
+    private var crewLibrary: some View {
+        let kept = store.isInCrewLibrary(documentID: document.id)
+
+        return VStack(alignment: .leading, spacing: 5) {
+            Eyebrow(text: "Crew library")
+
+            HStack(spacing: 8) {
+                Button(kept ? "Update in Crew Library" : "Keep in Crew Library",
+                       systemImage: kept ? "arrow.triangle.2.circlepath" : "person.crop.rectangle.stack.fill") {
+                    Task { await store.keepInCrewLibrary(documentID: document.id) }
+                }
+                .buttonStyle(.philonQuiet)
+                .accessibilityIdentifier("review.keepInCrewLibrary")
+
+                Spacer(minLength: 0)
+            }
+
+            Text(kept
+                 ? "Already kept. Keeping again replaces what the library holds with what is confirmed here now."
+                 : "Keeps these values and a copy of this scan in the Crew Library, so the next charter this person sails on does not ask for the photograph again. The copy stays when this trip is deleted.")
+                .font(Theme.Font.meta)
+                .foregroundStyle(Theme.inkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// `.warning-list` — what extraction could not settle, said plainly rather

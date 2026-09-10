@@ -5,7 +5,11 @@ import Observation
 /// encrypted store sees exactly one writer.
 @MainActor @Observable
 final class CrewStore {
-    private var secureStore: SecureStore?
+    /// Readable by this class's extensions in other files — `CrewStoreCrewLibrary`
+    /// copies sealed scans in and out of the library folder — and writable only
+    /// here, so the store still has exactly one thing that decides which
+    /// database it is talking to.
+    private(set) var secureStore: SecureStore?
     var data = AppData()
     var selectedTripID: UUID?
     var selectedDocumentID: UUID?

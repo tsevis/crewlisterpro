@@ -53,6 +53,9 @@ enum StoreError: LocalizedError {
 actor SecureStore {
     private let documentsURL: URL
     private let backupsURL: URL
+    /// The crew library's sealed scans, kept apart from any trip's. See
+    /// `keepInCrewLibrary`.
+    private let crewURL: URL
     private let keyData: Data
     private var database: OpaquePointer?
 
@@ -102,8 +105,10 @@ actor SecureStore {
         }
         documentsURL = root.appending(path: "documents", directoryHint: .isDirectory)
         backupsURL = root.appending(path: "backups", directoryHint: .isDirectory)
+        crewURL = root.appending(path: "crew", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: documentsURL, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: backupsURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: crewURL, withIntermediateDirectories: true)
         // The key file lives in this directory, so the directory is the outer
         // boundary: no other account on the machine has business reading it.
         try? fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path(percentEncoded: false))
@@ -293,6 +298,48 @@ actor SecureStore {
     func deleteOriginals(named fileNames: [String]) {
         for name in fileNames {
             try? FileManager.default.removeItem(at: documentsURL.appending(path: name))
+        }
+    }
+
+    // MARK: - The crew library's own folder
+    //
+    // A charter's documents are erased when the charter is, which is right —
+    // and it is why a person the operator wants to keep cannot be kept by
+    // pointing at one of those files. The library gets a folder of its own,
+    // sealed with the same key, that no trip can reach.
+
+    /// Copies a trip's sealed original into the library. Returns the library's
+    /// name for it.
+    ///
+    /// The sealed bytes are copied as they are rather than decrypted and
+    /// re-encrypted: it is the same key and the same box, so a copy is exact,
+    /// and the passport photograph never becomes plaintext to make one.
+    func keepInCrewLibrary(originalNamed fileName: String) throws -> String {
+        let libraryName = "\(UUID().uuidString).bin"
+        try FileManager.default.copyItem(at: documentsURL.appending(path: fileName),
+                                         to: crewURL.appending(path: libraryName))
+        return libraryName
+    }
+
+    /// Copies a library scan back out to a trip's own document. The trip gets
+    /// its own copy, so deleting the trip shreds that copy and leaves the
+    /// library's where it is.
+    func takeFromCrewLibrary(named libraryName: String, documentID: UUID) throws -> String {
+        let fileName = "\(documentID.uuidString).bin"
+        try FileManager.default.copyItem(at: crewURL.appending(path: libraryName),
+                                         to: documentsURL.appending(path: fileName))
+        return fileName
+    }
+
+    func readCrewOriginal(named libraryName: String) throws -> Data {
+        try decrypt(Data(contentsOf: crewURL.appending(path: libraryName)))
+    }
+
+    /// An app that holds passport scans has to be able to forget them, and the
+    /// library is now a second place they are held.
+    func deleteCrewOriginals(named libraryNames: [String]) {
+        for name in libraryNames {
+            try? FileManager.default.removeItem(at: crewURL.appending(path: name))
         }
     }
 

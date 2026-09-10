@@ -422,6 +422,10 @@ struct AppData: Codable {
     var documents: [CrewDocument] = []
     var assignments: [CrewAssignment] = []
 
+    /// People kept for the next charter, with their scans. Not attached to any
+    /// trip — that is the whole point of them. See `SavedCrewMember`.
+    var savedCrew: [SavedCrewMember] = []
+
     /// The operator's defaults. Held here rather than in `UserDefaults` so a
     /// restored snapshot restores the settings that produced it.
     var settings = AppSettings()
@@ -435,24 +439,25 @@ struct AppData: Codable {
     /// about data the next save has already rewritten.
     var decodingLosses: [String] = []
 
-    /// 3 added `settings` and `Boat.isRetired`; both decode from an older
-    /// payload as their defaults, so the bump records the change rather than
-    /// gating it.
-    static let currentSchemaVersion = 3
+    /// 3 added `settings` and `Boat.isRetired`; 4 added `savedCrew` and
+    /// `Boat.nickname`. All of them decode from an older payload as their
+    /// defaults, so the bump records the change rather than gating it.
+    static let currentSchemaVersion = 4
 
     /// Only the persisted properties. Declared explicitly so `decodingLosses`
     /// is never written to disk.
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, boats, trips, people, documents, assignments, settings
+        case schemaVersion, boats, trips, people, documents, assignments, savedCrew, settings
     }
 
-    init(schemaVersion: Int = AppData.currentSchemaVersion, boats: [Boat] = [], trips: [Trip] = [], people: [CrewPerson] = [], documents: [CrewDocument] = [], assignments: [CrewAssignment] = [], settings: AppSettings = AppSettings()) {
+    init(schemaVersion: Int = AppData.currentSchemaVersion, boats: [Boat] = [], trips: [Trip] = [], people: [CrewPerson] = [], documents: [CrewDocument] = [], assignments: [CrewAssignment] = [], savedCrew: [SavedCrewMember] = [], settings: AppSettings = AppSettings()) {
         self.schemaVersion = schemaVersion
         self.boats = boats
         self.trips = trips
         self.people = people
         self.documents = documents
         self.assignments = assignments
+        self.savedCrew = savedCrew
         self.settings = settings
     }
 
@@ -472,6 +477,7 @@ struct AppData: Codable {
         people = Self.salvage(from: container, forKey: .people, describing: "person", into: &losses)
         documents = Self.salvage(from: container, forKey: .documents, describing: "document", into: &losses)
         assignments = Self.salvage(from: container, forKey: .assignments, describing: "crew assignment", into: &losses)
+        savedCrew = Self.salvage(from: container, forKey: .savedCrew, describing: "saved crew member", into: &losses)
         // Not salvaged into `losses`: unreadable settings cost the operator a
         // handful of preferences they can set again in a minute, which is not
         // the same kind of loss as a passport that has left a trip, and saying

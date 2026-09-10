@@ -12,8 +12,16 @@ import SwiftUI
 
 // MARK: - Screens
 
-/// The top-level screens, in the order the work happens: name the yacht, put
-/// the people aboard, hand over the list. The first two are also the order the
+/// The top-level screens, in the order the work happens: keep the yacht and the
+/// crew you charter with, then the trip, the people aboard it and the list you
+/// hand over.
+///
+/// Fleet and Crew Library are the pair at the front for the same reason: both
+/// are things an operator owns and reuses across a season, described once
+/// rather than retyped per charter. Everything after them belongs to one trip.
+///
+/// The original note, still true of the rest:
+/// name the yacht, put the people aboard, hand over the list. The first two are also the order the
 /// export blockers appear in — an unnamed yacht blocks before an unconfirmed
 /// field does — so the tabs read left to right as the thing still to do.
 ///
@@ -23,6 +31,7 @@ import SwiftUI
 /// which is a screen.
 enum Screen: String, CaseIterable, Identifiable {
     case fleet
+    case crewLibrary
     case trip
     case people
     case crewList
@@ -33,6 +42,7 @@ enum Screen: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .fleet: "Fleet"
+        case .crewLibrary: "Crew Library"
         case .trip: "Trip"
         case .people: "People"
         case .crewList: "Crew List"
@@ -43,6 +53,7 @@ enum Screen: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .fleet: "sailboat"
+        case .crewLibrary: "person.crop.rectangle.stack"
         case .trip: "calendar"
         case .people: "person.2"
         case .crewList: "list.bullet.rectangle"

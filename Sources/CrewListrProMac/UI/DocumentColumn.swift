@@ -53,6 +53,11 @@ struct DocumentColumn: View {
                             Button("Make Client") { store.setClient(true, forPersonID: document.personID) }
                         }
                         Divider()
+                        Button(store.isInCrewLibrary(documentID: document.id)
+                               ? "Update in Crew Library" : "Keep in Crew Library") {
+                            Task { await store.keepInCrewLibrary(documentID: document.id) }
+                        }
+                        Divider()
                         Button("Delete Document…", role: .destructive) { pendingDeletion = document }
                     }
                 }

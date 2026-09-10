@@ -106,7 +106,9 @@ check it against its own image.**
   Dates are shown the way the passport prints them (`20 OCT 1972`) and stored as ISO-8601;
   either form can be typed. Below the fields sit the two facts that belong to the trip rather
   than the document: whether this person is the **client** who signs the papers — one per
-  trip, skipper or passenger — and, for the skipper alone, an email address.
+  trip, skipper or passenger — and, for the skipper alone, an email address. At the end of
+  that work sits **Keep in Crew Library**, which is the offer never to do it again for this
+  person.
 
 The strip above the Import button always names the next thing standing between this trip and
 a crew list ("Name the yacht.", "GIULIA ROSSI: Nationality, Date of birth, Sex still
@@ -244,7 +246,7 @@ CREWLISTR_FIXTURES=/path/to/documents CREWLISTR_OUTPUT=./TestOutput swift test -
 
 ## Testing
 
-472 tests, no unexpected failures. Nineteen are opt-in and skip unless their environment
+527 tests, no unexpected failures. Twenty are opt-in and skip unless their environment
 variable is set — they touch real identity documents or the live encrypted store.
 
 | Suite | Covers |
@@ -254,7 +256,10 @@ variable is set — they touch real identity documents or the live encrypted sto
 | `ExportServiceTests` | CSV structure and injection safety, PDF pagination and content |
 | `ExportClientTests` | The client signature block, the skipper's email, and which file gets which date format |
 | `DateFormatTests` | Voyage days across time zones, the Saturday charter week, `20 OCT 1972` both ways |
-| `FleetTests` | Keeping, retiring and deleting a yacht, and which one a new trip charters |
+| `FleetTests` | Keeping, ordering, renaming, retiring and deleting a yacht, and which one a new trip charters |
+| `CrewLibraryTests` | Keeping a person with their scan, reusing them, and forgetting them |
+| `TripCalendarTests` | Gathering trips into charter days, and what the strip is made of |
+| `DocumentDropTests` | What a Finder drag may put on the review pane, and what it may not |
 | `SettingsTests` | The defaults, the guards on them, and what each one changes |
 | `ScreenshotTests` *(opt-in)* | Renders every screen to a PNG so a layout can be looked at |
 | `InteractionTests` | Types into the real fields and leaves them — what a click actually does |
@@ -358,7 +363,10 @@ Sources/CrewListrProMac/
   OCRService.swift       Vision text recognition
   DocumentProcessor.swift Rotate, crop, enhance
   CrewStore.swift        Observable state; the single writer to the encrypted store
-  CrewStoreFleet.swift   The fleet: keeping, retiring and chartering a yacht
+  CrewStoreFleet.swift   The fleet: keeping, ordering, retiring and deleting a yacht
+  CrewStoreCrewLibrary.swift  The crew library: keeping a person and reusing them
+  CrewLibrary.swift      A kept person: their confirmed fields and their scan
+  TripCalendar.swift     Trips gathered into the days they sail on
   CrewStoreReview.swift  Confirming fields, roles, the client and the skipper's email
   SecureStore.swift      SQLCipher + AES-GCM + Keychain
   ModelManager.swift     Local model download with integrity checking
@@ -370,7 +378,10 @@ Sources/CrewListrProMac/
   UI/
     AppShell.swift       App entry, the window shell, storage-failure view
     AppChrome.swift      Screen row, command line, panels and banners
-    TripStrip.swift      The horizontal strip of yachts, and what can be done to one
+    TripStrip.swift      The horizontal strip of charter days, and what can be done to a trip
+    CrewLibraryScreen.swift  The people kept for the next charter
+    CrewLibraryDetail.swift  One kept person, their scan, and the way onto a trip
+    DocumentDrop.swift   What a Finder drag may put on the review pane
     FleetScreen.swift    The fleet, and the yacht being looked at
     FleetDetail.swift    One yacht: its four printed values, and what they look like
     SettingsScreen.swift Every default, grouped by when it applies

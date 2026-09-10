@@ -62,6 +62,8 @@ struct RootView: View {
     /// Held here rather than in `FleetScreen` so the yacht being looked at
     /// survives a trip to another tab and back.
     @State private var selectedBoatID: UUID?
+    /// The same, for the person being looked at in the Crew Library.
+    @State private var selectedSavedCrewID: UUID?
 
     var body: some View {
         @Bindable var store = store
@@ -148,6 +150,8 @@ struct RootView: View {
         switch screen {
         case .fleet:
             FleetScreen(selection: $selectedBoatID)
+        case .crewLibrary:
+            CrewLibraryScreen(selection: $selectedSavedCrewID)
         case .people:
             PeopleScreen(importing: $importing)
         case .crewList:
@@ -172,6 +176,7 @@ struct RootView: View {
     private var commandLine: some View {
         switch screen {
         case .fleet: fleetCommands
+        case .crewLibrary: crewLibraryCommands
         case .people: peopleCommands
         case .crewList: crewListCommands
         case .trip: tripCommands
@@ -203,6 +208,27 @@ struct RootView: View {
                     Label("New Trip with This Yacht", systemImage: "calendar.badge.plus")
                 }
                 .buttonStyle(.philonSecondary)
+            }
+        }
+    }
+
+    /// The library is a list of people you put on a trip, so the trip strip is
+    /// here: which charter the Add button means is a question this line has to
+    /// answer before the button is pressed, not after.
+    private var crewLibraryCommands: some View {
+        CommandBar {
+            TripStrip(onNewTrip: { boatID in store.createTrip(boatID: boatID); screen = .trip },
+                      onDeleteTrip: { pendingTripDeletion = store.selectedTrip })
+        } trailing: {
+            if let id = selectedSavedCrewID, let saved = store.savedCrewMember(withID: id) {
+                Button {
+                    Task { await store.addFromCrewLibrary(saved.id) }
+                } label: {
+                    Label("Add to This Trip", systemImage: "person.badge.plus")
+                }
+                .buttonStyle(.philonPrimary)
+                .disabled(store.selectedTripID == nil)
+                .help("Puts \(saved.displayName) and their scan on the selected trip, with every field still to confirm")
             }
         }
     }

@@ -18,13 +18,20 @@ final class OrphanAudit: XCTestCase {
 
         let store = try SecureStore()
         var referenced = Set<String>()
+        // The crew library seals its scans into a folder of its own, so its
+        // files are counted against that folder rather than this one — a
+        // library scan is not an orphan just because no trip points at it.
+        var referencedByLibrary = Set<String>()
 
         func collect(_ data: AppData, from source: String) {
             for document in data.documents {
                 referenced.insert(document.encryptedFileName)
                 for revision in document.imageRevisions { referenced.insert(revision) }
             }
-            print("AUDIT source \(source): \(data.documents.count) documents")
+            for saved in data.savedCrew where !saved.encryptedFileName.isEmpty {
+                referencedByLibrary.insert(saved.encryptedFileName)
+            }
+            print("AUDIT source \(source): \(data.documents.count) documents, \(data.savedCrew.count) kept people")
         }
 
         collect(try await store.load(), from: "current")
@@ -32,16 +39,23 @@ final class OrphanAudit: XCTestCase {
             collect(try await store.peek(backup.id), from: "snapshot \(backup.id)")
         }
 
-        let directory = FileManager.default.homeDirectoryForCurrentUser
-            .appending(path: "Library/Application Support/CrewListrPro/documents")
-        let onDisk = try FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false))
-            .filter { $0.hasSuffix(".bin") }
+        let root = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Library/Application Support/CrewListrPro")
 
-        let orphans = onDisk.filter { !referenced.contains($0) }.sorted()
-        print("AUDIT on-disk \(onDisk.count), referenced \(referenced.count), orphaned \(orphans.count)")
-        for orphan in orphans { print("AUDIT orphan \(orphan)") }
-        for name in referenced.sorted() where !onDisk.contains(name) {
-            print("AUDIT MISSING (referenced but not on disk) \(name)")
+        func audit(_ folder: String, against names: Set<String>) throws {
+            let directory = root.appending(path: folder)
+            let onDisk = (try? FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false)))?
+                .filter { $0.hasSuffix(".bin") } ?? []
+
+            let orphans = onDisk.filter { !names.contains($0) }.sorted()
+            print("AUDIT \(folder): on-disk \(onDisk.count), referenced \(names.count), orphaned \(orphans.count)")
+            for orphan in orphans { print("AUDIT orphan \(folder)/\(orphan)") }
+            for name in names.sorted() where !onDisk.contains(name) {
+                print("AUDIT MISSING (referenced but not on disk) \(folder)/\(name)")
+            }
         }
+
+        try audit("documents", against: referenced)
+        try audit("crew", against: referencedByLibrary)
     }
 }
