@@ -1,3 +1,61 @@
+# CrewListr Pro 0.4.0
+
+**There is an iPhone and iPad app.** It is the same application, not a companion
+to it: the same domain model, the same ICAO 9303 parser, the same export gate,
+compiled from the same files. What it adds is the one thing a Mac cannot do —
+take the passport where it already is.
+
+**A passport arrives from the share sheet.** CrewListr Pro appears in the share
+sheet of anything that offers a picture to another app: WhatsApp, Viber,
+Telegram, Signal, Messages, Mail, Photos, Files. The extension does not open the
+encrypted store — it puts the file in an App Group inbox, and the app takes it
+from there the next time it comes to the front. Taking is a *move*: the staged
+copy is erased as the document is sealed, so a passport photograph sits in a
+folder two processes can read for seconds rather than for the life of the
+installation.
+
+**Or the camera scans one.** VisionKit's document scanner — the one behind Notes
+— finds the edges of the page and corrects the perspective. That is the
+difference between three fields recovered and all five on a passport
+photographed at an angle across a desk, and it means the page goes into the
+encrypted store without ever being a photograph in anybody's camera roll.
+
+**A document that arrives from outside has no charter**, because the operator was
+in WhatsApp and not in this app. It waits in a banner above the tab bar until
+somebody says where it goes. Guessing which crew list a stranger's passport
+belongs on is not a guess this application makes.
+
+**Nothing about the review is relaxed for the smaller screen.** Extraction still
+returns *review* and never *cleared*, every field still carries its own
+confirmation, editing a value still retracts it, and the crew list is still shut
+until an operator has confirmed each one beside the image it came from.
+
+**Three bugs in the image tools, fixed by the port.** Rotate, crop and enhance
+went through `NSImage.lockFocus`, which renders at the display's backing scale.
+Rewriting them on Core Graphics for iOS made all three testable and true on the
+Mac as well: a quarter turn now swaps the sides exactly, four turns are the
+identity, and an edited revision is written as JPEG rather than uncompressed
+TIFF — a 300 KB photograph used to become a 3.6 MB revision, sealed and kept
+beside every other revision of the same page.
+
+**The printed crew list is drawn with Core Text.** AppKit's graphics origin is
+the bottom-left corner and UIKit's is the top-left, so the one call that drew
+every string on the form printed the whole page upside down on a phone. Core
+Text is the layer under both and has no opinion about the page; the Mac's PDF is
+unchanged.
+
+**On iOS the key is in the Keychain.** The long argument in `SecureStore` for
+keeping it in a file beside the database is entirely about macOS code-signing
+prompts, and none of it applies to a phone. The store is excluded from backup:
+the key is `WhenUnlockedThisDeviceOnly` and does not travel to a restored
+device, and documents that travelled without it would land unreadable.
+
+Building the iOS app needs XcodeGen; `./scripts/ios.sh` covers build, test, run
+and a way to put a file into the share inbox without a messaging app. The design
+and what had to be rewritten to leave the Mac are in `docs/ios.md`.
+
+---
+
 # CrewListr Pro 0.3.0
 
 Six changes, all from the same operator's use of 0.2.0.

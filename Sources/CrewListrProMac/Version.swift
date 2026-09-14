@@ -6,13 +6,14 @@ import Foundation
 enum AppVersion {
     /// Marketing version — CFBundleShortVersionString. Semantic versioning.
     ///
-    /// A minor bump rather than a patch, for the reason 0.2.0 was: this adds a
-    /// screen, a persisted-schema version, a second folder of sealed passport
-    /// scans and a change to how a yacht is named and a trip is picked. A store
-    /// written by this build carries schema 4, which an 0.2.x build has never
-    /// seen — it opens there, but the crew library and the yachts' own names in
-    /// it mean nothing to the older app.
-    static let short = "0.3.0"
+    /// A minor bump rather than a patch, for the reason 0.3.0 was: this adds a
+    /// second application. The persisted shape is unchanged — schema 4, written
+    /// and read identically by both builds — so a store is a store whichever
+    /// one opened it; what changed is that there is now an iPhone and iPad
+    /// build compiled from these same files, and a version that did not move
+    /// would leave the two claiming to be the same release when only one of
+    /// them existed.
+    static let short = "0.4.0"
 
     /// Build number — CFBundleVersion. Monotonic, bumped by CI on every build.
     static let build = "1"
