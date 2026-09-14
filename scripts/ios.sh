@@ -14,11 +14,12 @@
 #   ./scripts/ios.sh share <f>  put a file into the app's share inbox, as the
 #                               share extension would, so the receiving half of
 #                               the WhatsApp path can be exercised without one
-#   ./scripts/ios.sh device     build for a real device (needs CREWLISTR_TEAM)
+#   ./scripts/ios.sh device     build for the connected device (needs CREWLISTR_TEAM)
 #
 # CREWLISTR_SIM   the simulator to use          (default: iPhone 17 Pro)
 # CREWLISTR_SEED  set to `demo` for `run`       (a fictional fleet, debug only)
 # CREWLISTR_TEAM  the Apple Developer team id   (required by `device` only)
+# CREWLISTR_DEVICE  a device UDID                (default: the first connected)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -43,6 +44,25 @@ generate() {
 
 version_field() {
     sed -n "s/^ *static let $1 = \"\(.*\)\"$/\1/p" Sources/CrewListrProMac/Version.swift | head -1
+}
+
+# The first connected iPhone or iPad.
+#
+# Read out of `xctrace`, above the "== Simulators ==" line, and matched on the
+# *shape* of the identifier: a device is 40 hex characters, or the newer
+# 8-then-16 form, while this Mac's own entry is an ordinary 8-4-4-4-12 UUID.
+# Matching on the name instead would pick whichever machine is called "iPhone"
+# this week.
+device_udid() {
+    if [ -n "${CREWLISTR_DEVICE:-}" ]; then
+        echo "$CREWLISTR_DEVICE"
+        return
+    fi
+    xcrun xctrace list devices 2>/dev/null \
+        | sed -n '1,/== Simulators ==/p' \
+        | grep -oE '\(([0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}|[0-9a-f]{40})\)$' \
+        | tr -d '()' \
+        | head -1
 }
 
 product_path() {
@@ -100,13 +120,24 @@ share)
 device)
     # The simulator does not check who signed the app. A device does, and the
     # App Group is what hands a passport from the extension to the app — see
-    # docs/ios.md for the three things the developer account has to have.
+    # docs/ios.md for what the developer account has to have.
     [ -n "${CREWLISTR_TEAM:-}" ] || {
         echo "set CREWLISTR_TEAM to your Apple Developer team id (see docs/ios.md)" >&2
         exit 1
     }
+    UDID="$(device_udid)"
+    [ -n "$UDID" ] || {
+        echo "no iPhone or iPad is connected. Plug one in and trust this Mac, or set CREWLISTR_DEVICE to its UDID." >&2
+        exit 1
+    }
     generate
-    xcodebuild -project "$PROJECT" -scheme "$SCHEME" -sdk iphoneos \
+    # `-destination` naming the actual device, not just `-sdk iphoneos`.
+    # Without it Xcode has no device to register with the developer account and
+    # fails with "your team has no devices from which to generate a
+    # provisioning profile" — which sounds like an account problem and is
+    # really a missing argument.
+    xcodebuild -project "$PROJECT" -scheme "$SCHEME" \
+        -destination "platform=iOS,id=$UDID" \
         -configuration Debug -allowProvisioningUpdates \
         DEVELOPMENT_TEAM="$CREWLISTR_TEAM" CODE_SIGN_STYLE=Automatic \
         CODE_SIGN_IDENTITY="Apple Development" build

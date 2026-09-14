@@ -184,8 +184,8 @@ app runs, and every share silently vanishes with nothing in the log to say why.
 ### Onto a real iPhone
 
 The simulator needs nothing. A device needs three things from the Apple
-Developer account, and they are external steps in the same way Developer ID
-signing and notarization are for the Mac build:
+Developer account — external steps in the same way Developer ID signing and
+notarization are for the Mac build — and two on the phone:
 
 1. **An iOS development certificate.** The Developer ID certificate this Mac
    already has signs software for macOS outside the App Store and cannot sign
@@ -196,11 +196,26 @@ signing and notarization are for the Mac build:
    between them, and the failure is silent.
 3. **A provisioning profile for each**, including that group.
 
+And two things on the device itself:
+
+4. **Developer Mode on**, in Settings → Privacy & Security → Developer Mode,
+   which asks for a restart. Without it the phone is paired and visible to
+   `xcrun xctrace list devices` but is not a destination `xcodebuild` will
+   wait for.
+5. **Plugged in and trusted.** The build registers the connected device with
+   the account, which is what the provisioning profile is issued against.
+
 Then set the team and let Xcode manage signing:
 
 ```bash
 CREWLISTR_TEAM=XXXXXXXXXX ./scripts/ios.sh device
 ```
+
+It builds for the first connected device; `CREWLISTR_DEVICE=<udid>` picks
+another. The `-destination` naming that device is load-bearing: with only
+`-sdk iphoneos` Xcode has no device to register and fails with *"your team has
+no devices from which to generate a provisioning profile"*, which reads as an
+account problem and is really a missing argument.
 
 A **free personal team** will install the app on a device for seven days, but it
 cannot have App Groups — so the share extension, which is the whole reason the
