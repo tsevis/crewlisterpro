@@ -1,4 +1,4 @@
-import AppKit
+import CoreGraphics
 import Foundation
 import Vision
 
@@ -11,26 +11,34 @@ struct OCRResult: Sendable {
 
 enum OCRService {
     static func extract(from url: URL) throws -> OCRResult {
-        guard let image = NSImage(contentsOf: url) else {
-            return OCRResult(fields: [:], risk: .review, reasons: ["Preview or OCR is unavailable for this file."], rawText: "")
-        }
+        guard let image = PlatformImageCodec.decode(contentsOf: url) else { return unreadable }
         return try extract(image: image)
     }
 
     /// Re-reads an already-imported document from its decrypted bytes, so the
     /// review pane can re-analyse without touching the original file again.
     static func extract(from data: Data) throws -> OCRResult {
-        guard let image = NSImage(data: data) else {
-            return OCRResult(fields: [:], risk: .review, reasons: ["Preview or OCR is unavailable for this file."], rawText: "")
-        }
+        guard let image = PlatformImageCodec.decode(data) else { return unreadable }
         return try extract(image: image)
     }
 
-    private static func extract(image: NSImage) throws -> OCRResult {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return OCRResult(fields: [:], risk: .review, reasons: ["Preview or OCR is unavailable for this file."], rawText: "")
-        }
+    /// The answer for a file no image decoder on either platform can open. It
+    /// is a result rather than a thrown error because an unreadable file is
+    /// still a document the operator imported and can look at — it arrives on
+    /// the trip with every field blank and its own reason attached, instead of
+    /// failing the whole import.
+    private static let unreadable = OCRResult(
+        fields: [:], risk: .review,
+        reasons: ["Preview or OCR is unavailable for this file."], rawText: ""
+    )
 
+    /// Reads a page that has already been decoded to pixels.
+    ///
+    /// `CGImage` rather than a platform image class, so the same bytes give the
+    /// same reading on a Mac and on a phone: `UIImage` would have applied the
+    /// EXIF rotation and `NSImage` would have reported a point size that is not
+    /// the pixel size, and the band crop below is measured in pixels.
+    static func extract(image cgImage: CGImage) throws -> OCRResult {
         let text = try read(cgImage)
         var mrz = MRZ.parse(text)
 
