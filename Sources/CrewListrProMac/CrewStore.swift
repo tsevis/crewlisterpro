@@ -512,16 +512,37 @@ final class CrewStore {
         return "\(trips), \(documents)"
     }
 
-    /// Whether the local vision model is on this Mac. Stored here rather than
-    /// in the extension that manages it, because an extension cannot hold
-    /// state — see `CrewStoreLocalModel.swift` for everything that reads it.
     // MARK: - The optional local model
+    //
+    // Everything from here to the next section is macOS only, and it is the
+    // only part of this class that is. Not for want of trying to share it: the
+    // model is 5.8 GB of weights served by a `llama-server` process the app
+    // starts, and iOS has no `Process`, no room in a phone's storage budget for
+    // the download, and no way to hold a several-minute model load alive behind
+    // a lock screen. A rescue button that could never succeed is worse on a
+    // phone than no button — so the phone has none, and a document whose MRZ
+    // cannot be read is held back asking for the field to be typed, exactly as
+    // it is on a Mac with the model not installed.
+
+    /// Errors reach the operator with their recovery suggestion attached; an
+    /// `errorDescription` alone often says what failed but not what to do.
+    nonisolated static func explain(_ error: Error) -> String {
+        guard let local = error as? LocalizedError, let description = local.errorDescription else {
+            return error.localizedDescription
+        }
+        guard let suggestion = local.recoverySuggestion else { return description }
+        return "\(description)\n\n\(suggestion)"
+    }
 
     /// Whether the local vision model is on this Mac. The rescue action offers
     /// nothing when it is not, and there was no way to install it at all — the
     /// menu item threw "The file doesn't exist." with no route forward.
+    ///
+    /// Outside the `#if` because it is what the interface asks, and on iOS the
+    /// honest answer is a permanent no rather than a missing property.
     private(set) var localModelIsInstalled = false
 
+    #if os(macOS)
     func refreshLocalModelState() async {
         guard let manager = try? ModelManager() else { return }
         localModelIsInstalled = await manager.isReady(.qwen3VL8BQ4)
@@ -581,16 +602,6 @@ final class CrewStore {
         }
     }
 
-    /// Errors reach the operator with their recovery suggestion attached; an
-    /// `errorDescription` alone often says what failed but not what to do.
-    nonisolated static func explain(_ error: Error) -> String {
-        guard let local = error as? LocalizedError, let description = local.errorDescription else {
-            return error.localizedDescription
-        }
-        guard let suggestion = local.recoverySuggestion else { return description }
-        return "\(description)\n\n\(suggestion)"
-    }
-
     func rescueSelectedDocumentWithLocalAI() {
         guard let id = selectedDocumentID, let document = data.documents.first(where: { $0.id == id }), let secureStore else { return }
         activity = .indeterminate("Asking the local model", detail: document.originalName)
@@ -638,6 +649,8 @@ final class CrewStore {
             activity = .indeterminate("Reading the document with the local model", detail: document)
         }
     }
+
+    #endif
 
     // MARK: - Derived state
 

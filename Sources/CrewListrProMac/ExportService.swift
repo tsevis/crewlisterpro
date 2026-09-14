@@ -1,4 +1,5 @@
-import AppKit
+import CoreGraphics
+import CoreText
 import Foundation
 
 /// Writes the two deliverables a port authority accepts: a machine-readable CSV
@@ -150,8 +151,9 @@ enum ExportService {
         mutating func begin(pageNumber number: Int, pageCount: Int?) {
             pageNumber = number
             context.beginPDFPage(nil)
-            NSGraphicsContext.saveGraphicsState()
-            NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+            // Core Text writes along this matrix, and a PDF context does not
+            // reset it between pages.
+            context.textMatrix = .identity
             y = pageSize.height - margin
             drawTitle()
             drawHeaderBoxes()
@@ -159,7 +161,6 @@ enum ExportService {
 
         mutating func finish() {
             drawFooter()
-            NSGraphicsContext.restoreGraphicsState()
             context.endPDFPage()
         }
 
@@ -185,7 +186,7 @@ enum ExportService {
             y -= headerBoxHeight
             for (index, entry) in entries.enumerated() {
                 let rect = CGRect(x: margin + CGFloat(index) * width, y: y, width: width, height: headerBoxHeight)
-                context.setStrokeColor(NSColor.black.cgColor)
+                context.setStrokeColor(Page.rule)
                 context.setLineWidth(0.7)
                 context.stroke(rect)
                 draw(entry.0, at: CGPoint(x: rect.minX + 4, y: rect.maxY - 11), size: 6.5, bold: true)
@@ -243,7 +244,7 @@ enum ExportService {
             // A ruled line to sign on, not an empty box: it says where the pen
             // goes without claiming the signature is a field this app holds.
             let lineStart = margin + nameWidth + 20
-            context.setStrokeColor(NSColor.black.cgColor)
+            context.setStrokeColor(Page.rule)
             context.setLineWidth(0.5)
             context.move(to: CGPoint(x: lineStart, y: y))
             context.addLine(to: CGPoint(x: pageSize.width - margin, y: y))
@@ -269,10 +270,10 @@ enum ExportService {
             var x = margin
             for (column, value) in zip(ExportService.columns(totalWidth: contentWidth), cells) {
                 let rect = CGRect(x: x, y: y, width: column.width, height: rowHeight)
-                context.setStrokeColor(NSColor.black.cgColor)
+                context.setStrokeColor(Page.rule)
                 context.setLineWidth(0.5)
                 context.stroke(rect)
-                draw(fitted(value, width: column.width - 8, size: style.size),
+                draw(fitted(value, width: column.width - 8, size: style.size, bold: style.bold),
                      at: CGPoint(x: x + 4, y: y + 6), size: style.size, bold: style.bold)
                 x += column.width
             }
@@ -284,23 +285,63 @@ enum ExportService {
         }
 
         // MARK: - Text
+        //
+        // Core Text, not `NSString.draw(at:)`. The AppKit and UIKit text stacks
+        // disagree about which way up a graphics context is — AppKit's origin
+        // is the bottom-left corner and UIKit's is the top-left — so the one
+        // call that drew every string on this page printed the whole crew list
+        // upside down when the same code was asked to run on a phone. Core Text
+        // is the layer under both of them and has no opinion about the page: it
+        // draws a line at the baseline the caller sets, on either platform.
 
-        private func attributes(size: CGFloat, bold: Bool, gray: CGFloat) -> [NSAttributedString.Key: Any] {
-            [.font: bold ? NSFont.boldSystemFont(ofSize: size) : NSFont.systemFont(ofSize: size),
-             .foregroundColor: NSColor(white: gray, alpha: 1)]
+        /// Black, for the boxes and the ruled lines.
+        private static let rule = CGColor(gray: 0, alpha: 1)
+
+        /// The system face, at a weight. `NSFont` and `UIFont` are both toll-free
+        /// bridged to `CTFont`, so this stays the typeface the Mac build has
+        /// always printed rather than a named substitute.
+        private func font(size: CGFloat, bold: Bool) -> CTFont {
+            (bold ? PlatformFont.boldSystemFont(ofSize: size) : PlatformFont.systemFont(ofSize: size)) as CTFont
         }
 
+        /// The Core Text keys deliberately, not `NSAttributedString.Key`: the
+        /// AppKit and UIKit colour keys carry a platform colour object that
+        /// `CTLineCreateWithAttributedString` does not read, and the text would
+        /// come out black whatever `gray` said.
+        private func line(_ text: String, size: CGFloat, bold: Bool, gray: CGFloat) -> CTLine {
+            let attributes: [NSAttributedString.Key: Any] = [
+                NSAttributedString.Key(kCTFontAttributeName as String): font(size: size, bold: bold),
+                NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: gray, alpha: 1),
+            ]
+            return CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+        }
+
+        /// `point` is the bottom-left of the line's own box, which is where
+        /// every measurement on this page was written against — so the baseline
+        /// sits one descent above it.
         private func draw(_ text: String, at point: CGPoint, size: CGFloat, bold: Bool = false, gray: CGFloat = 0) {
-            text.draw(at: point, withAttributes: attributes(size: size, bold: bold, gray: gray))
+            guard !text.isEmpty else { return }
+            let drawn = line(text, size: size, bold: bold, gray: gray)
+            var descent: CGFloat = 0
+            CTLineGetTypographicBounds(drawn, nil, &descent, nil)
+            context.textPosition = CGPoint(x: point.x, y: point.y + descent)
+            CTLineDraw(drawn, context)
+        }
+
+        private func width(of text: String, size: CGFloat, bold: Bool) -> CGFloat {
+            CTLineGetTypographicBounds(line(text, size: size, bold: bold, gray: 0), nil, nil, nil)
         }
 
         /// Truncates with an ellipsis rather than letting a long name overrun
         /// into the next column.
-        private func fitted(_ text: String, width: CGFloat, size: CGFloat) -> String {
-            let attributes = attributes(size: size, bold: false, gray: 0)
-            guard (text as NSString).size(withAttributes: attributes).width > width else { return text }
+        ///
+        /// Measured at the weight it will be *set* in. Measuring the bold client
+        /// row against the regular face let it overrun the column it was fitted
+        /// to, which is the one row on the page a reader is meant to find.
+        private func fitted(_ text: String, width columnWidth: CGFloat, size: CGFloat, bold: Bool = false) -> String {
+            guard width(of: text, size: size, bold: bold) > columnWidth else { return text }
             var truncated = text
-            while !truncated.isEmpty, ((truncated + "…") as NSString).size(withAttributes: attributes).width > width {
+            while !truncated.isEmpty, width(of: truncated + "…", size: size, bold: bold) > columnWidth {
                 truncated.removeLast()
             }
             return truncated + "…"

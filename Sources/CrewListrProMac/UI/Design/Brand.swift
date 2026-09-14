@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// The two marks the interface shows, loaded once.
@@ -10,16 +9,16 @@ import SwiftUI
 /// from opening.
 enum Brand {
     /// Charis Tsevis's maker's mark. Shown at 20pt, so the 40pt asset is its @2x.
-    static let makersMark: NSImage? = load("TsevisMark")
+    static let makersMark: PlatformImage? = load("TsevisMark")
 
     /// CrewListr Pro's own icon, masked to the macOS shape.
-    static let appMark: NSImage? = load("AppMark")
+    static let appMark: PlatformImage? = load("AppMark")
 
     /// Union Yachting's mark, and the photograph behind the info screen's
     /// lockup — an aerial of a wake that happens to draw their own logo on the
     /// water, which is why it is the key art rather than a stock sea.
-    static let unionMark: NSImage? = load("UnionMark")
-    static let unionBanner: NSImage? = load("UnionBanner", extension: "jpg")
+    static let unionMark: PlatformImage? = load("UnionMark")
+    static let unionBanner: PlatformImage? = load("UnionBanner", extension: "jpg")
 
     static let unionName = "Union Yachting"
     static let unionSite = URL(string: "https://www.unionyachting.com")!
@@ -69,10 +68,11 @@ enum Brand {
     /// Only here to give `Bundle(for:)` a class in this module to locate.
     private final class BundleLocator {}
 
-    private static func load(_ name: String, extension ext: String = "png") -> NSImage? {
+    private static func load(_ name: String, extension ext: String = "png") -> PlatformImage? {
         guard let url = resourceBundle.url(forResource: name, withExtension: ext),
-              let image = NSImage(contentsOf: url) else { return nil }
-        return image
+              let data = try? Data(contentsOf: url),
+              let decoded = PlatformImageCodec.decode(data) else { return nil }
+        return PlatformImage.from(cgImage: decoded)
     }
 }
 
@@ -95,7 +95,7 @@ struct MakersMark: View {
         } label: {
             Group {
                 if let mark = Brand.makersMark {
-                    Image(nsImage: mark).resizable().interpolation(.high)
+                    Image(platformImage: mark).resizable().interpolation(.high)
                 } else {
                     // The bundle is missing: keep the affordance, drop the art.
                     Text("CT")

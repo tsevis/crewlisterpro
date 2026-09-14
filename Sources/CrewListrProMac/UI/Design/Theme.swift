@@ -1,7 +1,12 @@
+#if canImport(AppKit)
 import AppKit
+#endif
+#if canImport(UIKit)
+import UIKit
+#endif
 import SwiftUI
 
-/// The Philon design language, ported to AppKit colours.
+/// The Philon design language, ported to platform colours.
 ///
 /// Philon ships two skins in one stylesheet: a dark "web" theme and, layered
 /// over it, a macOS skin built from Apple's system greys with one borrowed
@@ -9,10 +14,16 @@ import SwiftUI
 /// reproduced here — the values below are read straight out of
 /// `philon/src/styles.css`, not approximated by eye.
 ///
-/// Every colour is a *dynamic* NSColor rather than a pair of SwiftUI colours
-/// chosen at read time. Appearance on macOS can change under a view that is
-/// already on screen (the system switching at sunset, or a window dragged to a
-/// display with a different profile), and a value resolved once does not follow.
+/// Every colour is a *dynamic* platform colour rather than a pair of SwiftUI
+/// colours chosen at read time. Appearance can change under a view that is
+/// already on screen — the system switching at sunset, a Mac window dragged to
+/// a display with a different profile, an iPhone crossing its own dark-mode
+/// schedule — and a value resolved once does not follow.
+///
+/// The two platforms spell the same idea differently: AppKit asks a block for a
+/// colour per `NSAppearance`, UIKit per `UITraitCollection`. `dynamic` below is
+/// the only place that difference appears; every value in this file is written
+/// once.
 enum Theme {
 
     // MARK: - Accent
@@ -152,30 +163,71 @@ enum Theme {
     // nearest weight AppKit actually ships.
 
     enum Font {
+        /// How much larger the same type is set on a phone.
+        ///
+        /// The scale below was authored for a Mac, where 13px is the reading
+        /// size and the window is two feet from the reader's face. A phone is
+        /// held at half that distance on a screen a fifth the width, and iOS
+        /// sets its own body text at 17pt for exactly that reason. Carrying the
+        /// Mac's numbers across unchanged produced an interface that was
+        /// *correct* and unreadable.
+        ///
+        /// One multiplier rather than a second set of values, so the type scale
+        /// stays one design with one set of relationships in it — a heading is
+        /// still 1.85× the body on both, and a change to one reaches the other.
+        #if os(macOS)
+        static let scale: CGFloat = 1
+        #else
+        static let scale: CGFloat = 1.25
+        #endif
+
+        /// A point size somebody with poor eyesight can still read.
+        ///
+        /// `Font.system(size:)` is a *fixed* size: it does not move with Dynamic
+        /// Type, which on a Mac is fine because macOS has no Dynamic Type, and
+        /// on a phone means an operator who has set Larger Text gets the same
+        /// eleven points as everybody else. This app is read on a pontoon in
+        /// July sunlight with a passport in the other hand.
+        ///
+        /// Scaled against Body so the whole scale moves together — a heading
+        /// stays 1.85× the body text at every setting — and capped at 1.6×,
+        /// because the accessibility sizes go far enough to put three words on
+        /// a line and this interface has tables in it.
+        private static func sized(_ points: CGFloat, _ weight: SwiftUI.Font.Weight = .regular,
+                                  design: SwiftUI.Font.Design = .default) -> SwiftUI.Font {
+            let base = points * scale
+            #if canImport(UIKit)
+            let scaled = min(UIFontMetrics(forTextStyle: .body).scaledValue(for: base), base * 1.6)
+            #else
+            let scaled = base
+            #endif
+            return .system(size: scaled.rounded(), weight: weight, design: design)
+        }
+
         /// `h1` — 24px/700, -.035em.
-        static let screenTitle = SwiftUI.Font.system(size: 24, weight: .bold)
+        static var screenTitle: SwiftUI.Font { sized(24, .bold) }
         /// `.secondary-heading h2` — 22px/610.
-        static let dialogTitle = SwiftUI.Font.system(size: 22, weight: .semibold)
+        static var dialogTitle: SwiftUI.Font { sized(22, .semibold) }
         /// `.queue-panel h3` — 16px/620.
-        static let panelTitle = SwiftUI.Font.system(size: 15, weight: .semibold)
+        static var panelTitle: SwiftUI.Font { sized(15, .semibold) }
         /// `.subpanel-header h2` — 14px.
-        static let sectionTitle = SwiftUI.Font.system(size: 13, weight: .semibold)
+        static var sectionTitle: SwiftUI.Font { sized(13, .semibold) }
         /// 13px — the default reading size.
-        static let body = SwiftUI.Font.system(size: 13)
-        static let bodyEmphasis = SwiftUI.Font.system(size: 13, weight: .medium)
+        static var body: SwiftUI.Font { sized(13) }
+        static var bodyEmphasis: SwiftUI.Font { sized(13, .medium) }
         /// 12px — supporting copy under a heading.
-        static let support = SwiftUI.Font.system(size: 12)
-        static let supportEmphasis = SwiftUI.Font.system(size: 12, weight: .semibold)
+        static var support: SwiftUI.Font { sized(12) }
+        static var supportEmphasis: SwiftUI.Font { sized(12, .semibold) }
         /// 11px — metadata, footers, the version stamp.
-        static let meta = SwiftUI.Font.system(size: 11)
-        static let metaEmphasis = SwiftUI.Font.system(size: 11, weight: .semibold)
+        static var meta: SwiftUI.Font { sized(11) }
+        static var metaEmphasis: SwiftUI.Font { sized(11, .semibold) }
         /// 10px/650 with .035em tracking, uppercased. `.eyebrow`
-        static let eyebrow = SwiftUI.Font.system(size: 10, weight: .semibold)
+        static var eyebrow: SwiftUI.Font { sized(10, .semibold) }
         /// `.batch-metrics strong` — 26px/580, -.04em.
-        static let metric = SwiftUI.Font.system(size: 26, weight: .medium)
+        static var metric: SwiftUI.Font { sized(26, .medium) }
         /// `.output-content` — SF Mono at reading size.
-        static let mono = SwiftUI.Font.system(size: 12, design: .monospaced)
-        static let monoMeta = SwiftUI.Font.system(size: 11, design: .monospaced)
+        static var mono: SwiftUI.Font { sized(12, design: .monospaced) }
+        static var monoMeta: SwiftUI.Font { sized(11, design: .monospaced) }
     }
 
     // MARK: - Shadow
@@ -190,20 +242,25 @@ enum Theme {
     // MARK: - Building dynamic colours
 
     private static func dynamic(light: Int, dark: Int) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark ? NSColor(rgb: dark) : NSColor(rgb: light)
-        })
+        dynamicAlpha(light: (light, 1), dark: (dark, 1))
     }
 
     private static func dynamicAlpha(light: (Int, Double), dark: (Int, Double)) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            appearance.isDark
-                ? NSColor(rgb: dark.0).withAlphaComponent(dark.1)
-                : NSColor(rgb: light.0).withAlphaComponent(light.1)
+        #if canImport(AppKit)
+        return Color(platformColor: NSColor(name: nil) { appearance in
+            let chosen = appearance.isDark ? dark : light
+            return PlatformColor(rgb: chosen.0).withAlphaComponent(chosen.1)
         })
+        #else
+        return Color(platformColor: UIColor { traits in
+            let chosen = traits.userInterfaceStyle == .dark ? dark : light
+            return PlatformColor(rgb: chosen.0).withAlphaComponent(chosen.1)
+        })
+        #endif
     }
 }
 
+#if canImport(AppKit)
 private extension NSAppearance {
     /// `bestMatch` rather than a name comparison: the accessibility and
     /// high-contrast appearances are distinct names that are still dark.
@@ -211,15 +268,18 @@ private extension NSAppearance {
         bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
 }
+#endif
 
-private extension NSColor {
+private extension PlatformColor {
     /// 0xRRGGBB in sRGB, which is the space the CSS values were authored in.
     convenience init(rgb: Int) {
-        self.init(
-            srgbRed: CGFloat((rgb >> 16) & 0xFF) / 255,
-            green: CGFloat((rgb >> 8) & 0xFF) / 255,
-            blue: CGFloat(rgb & 0xFF) / 255,
-            alpha: 1
-        )
+        let red = CGFloat((rgb >> 16) & 0xFF) / 255
+        let green = CGFloat((rgb >> 8) & 0xFF) / 255
+        let blue = CGFloat(rgb & 0xFF) / 255
+        #if canImport(AppKit)
+        self.init(srgbRed: red, green: green, blue: blue, alpha: 1)
+        #else
+        self.init(red: red, green: green, blue: blue, alpha: 1)
+        #endif
     }
 }

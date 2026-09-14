@@ -1,4 +1,14 @@
+#if canImport(CSQLCipher)
 import CSQLCipher
+#else
+// iOS has no Homebrew. What it has instead is the whole container encrypted by
+// the operating system under a key the passcode unlocks, which SQLCipher's page
+// encryption was standing in for on a Mac. The property that actually matters
+// here is unchanged on both platforms and is asserted by `SQLCipherTests`: the
+// only thing this database ever stores is one AES-GCM sealed box, so the file
+// contains no plaintext whichever SQLite opened it.
+import SQLite3
+#endif
 import CryptoKit
 import Foundation
 import Security
@@ -112,12 +122,41 @@ actor SecureStore {
         // The key file lives in this directory, so the directory is the outer
         // boundary: no other account on the machine has business reading it.
         try? fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path(percentEncoded: false))
+        Self.protect(root, fileManager: fileManager)
         let databaseURL = root.appending(path: "crewlistr.sqlite", directoryHint: .notDirectory)
         keyData = try Self.loadOrCreateKey(root: root, databaseURL: databaseURL, fileManager: fileManager)
         database = try Self.openDatabase(at: databaseURL.path(percentEncoded: false), keyData: keyData)
     }
 
     deinit { if let database { sqlite3_close(database) } }
+
+    /// What iOS offers instead of a POSIX mode.
+    ///
+    /// Two attributes, for two different threats.
+    ///
+    /// **Data Protection.** `.completeUnlessOpen` means the files are encrypted
+    /// by the system under a key the passcode releases, and a file already open
+    /// when the phone locks stays readable — which matters because a crew list
+    /// is exported over the share sheet while the screen can switch off.
+    /// `.complete` would fail the write instead.
+    ///
+    /// **Not backed up.** The key is a Keychain item marked
+    /// `WhenUnlockedThisDeviceOnly`, which by definition does not travel to a
+    /// restored device. Letting the documents travel without it would put an
+    /// operator's passport scans in iCloud in a form nothing can ever open —
+    /// the worst of both: the data leaves the phone and is useless when it
+    /// lands. So it does not leave. What survives a lost phone is the crew list
+    /// already exported, which is the artefact the charter actually needed.
+    private static func protect(_ root: URL, fileManager: FileManager) {
+        #if os(iOS)
+        try? fileManager.setAttributes([.protectionKey: FileProtectionType.completeUnlessOpen],
+                                       ofItemAtPath: root.path(percentEncoded: false))
+        var directory = root
+        var resource = URLResourceValues()
+        resource.isExcludedFromBackup = true
+        try? directory.setResourceValues(resource)
+        #endif
+    }
 
     func load() throws -> AppData {
         guard let encrypted = try blob(query: "SELECT payload FROM secure_state WHERE id=1") else { return AppData() }
@@ -351,6 +390,8 @@ actor SecureStore {
         return revisionName
     }
 
+    private static let createTable = "CREATE TABLE IF NOT EXISTS secure_state (id INTEGER PRIMARY KEY CHECK(id = 1), payload BLOB NOT NULL)"
+
     private static func openDatabase(at path: String, keyData: Data) throws -> OpaquePointer {
         var handle: OpaquePointer?
         let status = sqlite3_open_v2(path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil)
@@ -360,12 +401,22 @@ actor SecureStore {
             if let handle { sqlite3_close(handle) }
             throw StoreError.database("Could not open \(path): \(message)")
         }
+        #if canImport(CSQLCipher)
         let result = keyData.withUnsafeBytes { sqlite3_key(handle, $0.baseAddress, Int32(keyData.count)) }
         guard result == SQLITE_OK else {
             defer { sqlite3_close(handle) }
             throw StoreError.database(String(cString: sqlite3_errmsg(handle)))
         }
-        for sql in ["PRAGMA cipher_memory_security = ON", "CREATE TABLE IF NOT EXISTS secure_state (id INTEGER PRIMARY KEY CHECK(id = 1), payload BLOB NOT NULL)"] {
+        let statements = ["PRAGMA cipher_memory_security = ON", Self.createTable]
+        #else
+        // `sqlite3_key` and the cipher pragmas are SQLCipher's, not SQLite's.
+        // Asking for them here would not fail loudly — an unknown pragma is a
+        // no-op — so they are simply not asked for, and the file protection set
+        // on the directory in `init` is what stands in their place.
+        _ = keyData
+        let statements = [Self.createTable]
+        #endif
+        for sql in statements {
             var error: UnsafeMutablePointer<CChar>?
             guard sqlite3_exec(handle, sql, nil, nil, &error) == SQLITE_OK else {
                 let message = error.map { String(cString: $0) } ?? String(cString: sqlite3_errmsg(handle))
@@ -435,6 +486,50 @@ actor SecureStore {
     /// The Keychain's extra margin was real, and it is traded away here for an
     /// app that opens when it is double-clicked.
     private static func loadOrCreateKey(root: URL, databaseURL: URL, fileManager: FileManager) throws -> Data {
+        #if os(iOS)
+        return try iOSKey()
+        #else
+        return try macKey(root: root, databaseURL: databaseURL, fileManager: fileManager)
+        #endif
+    }
+
+    /// On iOS the key goes in the Keychain, and the long argument above does
+    /// not apply.
+    ///
+    /// Every word of that reasoning is about macOS: an access list tied to a
+    /// code signature, a login password prompt on a build signed with anything
+    /// short of a Developer ID, an operator answering it between two crew
+    /// lists. iOS has none of that. An app is signed by a provisioning profile,
+    /// its Keychain items are scoped to its own access group, and reading one
+    /// asks nobody anything. So the trade the Mac build makes — a weaker
+    /// resting place for a key, in exchange for an app that opens when it is
+    /// double-clicked — has nothing to buy here, and the key is kept where it
+    /// belongs.
+    ///
+    /// `WhenUnlockedThisDeviceOnly`: available only while the phone is
+    /// unlocked, never synced to iCloud, and never restored onto another
+    /// device. See `protect` for what that means for the documents.
+    private static func iOSKey() throws -> Data {
+        let identity: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainAccount,
+        ]
+        var found: CFTypeRef?
+        let read = SecItemCopyMatching(identity.merging([kSecReturnData as String: true]) { current, _ in current } as CFDictionary, &found)
+        if read == errSecSuccess, let data = found as? Data, data.count == 32 { return data }
+        guard read == errSecItemNotFound else { throw StoreError.unavailableKey(stage: .read, status: read) }
+
+        let fresh = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
+        let created = SecItemAdd(identity.merging([
+            kSecValueData as String: fresh,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        ]) { current, _ in current } as CFDictionary, nil)
+        guard created == errSecSuccess else { throw StoreError.unavailableKey(stage: .create, status: created) }
+        return fresh
+    }
+
+    private static func macKey(root: URL, databaseURL: URL, fileManager: FileManager) throws -> Data {
         let keyURL = root.appending(path: "local-encryption-key", directoryHint: .notDirectory)
         if let existing = try? Data(contentsOf: keyURL), existing.count == 32 { return existing }
 

@@ -9,3 +9,13 @@ TestOutput/
 # to host the XCUITest bundle a Swift package cannot; committing it would mean
 # keeping a second project file in step with Package.swift by hand.
 CrewListrPro.xcodeproj/
+
+# Generated from ios-project.yml by scripts/ios.sh, for the same reason — and
+# so are the Info.plists and entitlements it writes beside the sources. The
+# spec is where those values are declared; a committed copy is a second place
+# for the bundle to disagree with the build that made it.
+CrewListrProiOS.xcodeproj/
+Sources/CrewListrProiOS/Info.plist
+Sources/CrewListrProiOS/CrewListrPro.entitlements
+Sources/CrewListrProShare/Info.plist
+Sources/CrewListrProShare/CrewListrProShare.entitlements

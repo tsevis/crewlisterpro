@@ -2,18 +2,19 @@
 
 <img src="docs/icon-masked.png" alt="CrewListr Pro" width="128">
 
-**Offline crew-list preparation for charter yachts.** Version 0.3.0 · macOS 15+ · Apple Silicon
+**Offline crew-list preparation for charter yachts.** Version 0.4.0 · macOS 15+ (Apple Silicon) · iOS 17+
 
 CrewListr Pro turns photographed or scanned identity documents into the crew list a port
-authority expects. Extraction runs entirely on this Mac using Vision OCR and ICAO 9303
-machine-readable-zone parsing, with an optional local vision model for documents whose MRZ
-cannot be read. Documents and extracted data never leave the machine: application state
+authority expects. Extraction runs entirely on the device using Vision OCR and ICAO 9303
+machine-readable-zone parsing, with an optional local vision model on macOS for documents
+whose MRZ cannot be read. The iPhone and iPad build takes a passport straight out of
+WhatsApp, Viber or any other share sheet — see [**CrewListr Pro for iOS**](docs/ios.md). Documents and extracted data never leave the machine: application state
 lives in a SQLCipher database and original files are sealed with AES-GCM under a
 Keychain-held key. **Nothing can be exported until an operator has confirmed every field
 against the document image.**
 
 **Topics** · `crew-list` `yacht-charter` `maritime` `port-clearance` `passport` `mrz`
-`icao-9303` `ocr` `vision` `macos` `swiftui` `apple-silicon` `offline-first` `on-device-ai`
+`icao-9303` `ocr` `vision` `macos` `ios` `swiftui` `apple-silicon` `offline-first` `on-device-ai`
 `sqlcipher` `aes-gcm` `privacy`
 
 ---
@@ -151,6 +152,52 @@ CREWLISTR_SCREENSHOT_OUT=/tmp/shots swift test --filter ScreenshotTests
 
 ---
 
+## On the phone
+
+![CrewListr Pro on iPhone](docs/screenshots/ios-01-review.png)
+
+The passport photograph is already on the phone. A charter agent is sent a page
+on WhatsApp, and on a Mac everything between that message and a crew list is
+clerical: save it, find it, move it across, import it. On iPhone the picture is
+in the hand holding the phone.
+
+- **Share it in.** CrewListr Pro appears in the share sheet of anything that
+  offers a picture to another app — WhatsApp, Viber, Telegram, Signal, Messages,
+  Mail, Photos, Files. The extension does not open the encrypted store; it puts
+  the file in an App Group inbox, and the app takes it from there the next time
+  it comes to the front. Taking is a move: the staged copy is erased as it is
+  sealed.
+- **Or photograph it.** The camera route is VisionKit's document scanner, the
+  one behind Notes: it finds the edges of the page and corrects the perspective,
+  which is the difference between three fields recovered and all five on a
+  passport photographed at an angle. The page goes straight into the encrypted
+  store without ever being a photograph in anybody's camera roll.
+- **Photos and Files** are there too, the latter reaching iCloud Drive and every
+  other Files provider.
+- **A document that arrives from outside has no charter** — the operator was in
+  WhatsApp, not in this app — so it waits in a banner until somebody says where
+  it goes. Guessing which crew list a stranger's passport belongs on is not a
+  guess this app makes.
+- **The crew list goes back out through the share sheet**, because on a phone
+  the useful question is not "where on the disk" but "to whom".
+
+![Two passports shared into CrewListr Pro, waiting for a charter](docs/screenshots/ios-02-intake.png)
+
+The same module: the same domain model, the same ICAO 9303 parser, the same
+export gate. Nothing about the review is relaxed for the smaller screen —
+extraction still returns *review* and never *cleared*, every field still carries
+its own confirmation, and the export is still shut until an operator has
+confirmed each one beside the image it came from.
+
+```bash
+./scripts/ios.sh run
+```
+
+The design, the four things that had to be rewritten to leave the Mac, and what
+iOS stores where are in [`docs/ios.md`](docs/ios.md).
+
+---
+
 ## Build and run
 
 ```bash
@@ -163,6 +210,11 @@ swift test
 
 ```bash
 ./scripts/release.sh --install
+```
+
+```bash
+./scripts/ios.sh build    # the iOS app, for the simulator
+./scripts/ios.sh test     # and its tests
 ```
 
 `release.sh` produces a self-contained `.app` bundle and DMG including SQLCipher and the
@@ -196,11 +248,14 @@ Developer ID and satisfies nothing on anyone else's Mac. Creating it asks for th
 password once, because macOS requires that to trust a certificate for code signing.
 
 **Requires** Homebrew `sqlcipher` and `openssl@4`; `llama-server` on `PATH` (or
-`CREWLISTR_LLAMA_SERVER`) only if you package the optional local model.
+`CREWLISTR_LLAMA_SERVER`) only if you package the optional local model; `xcodegen` only
+for the iOS build, which uses neither SQLCipher nor the local model.
 
 ---
 
 ## How extraction works
+
+Identically on both platforms — the same file, the same pass, the same arithmetic.
 
 1. **Vision OCR** reads the page in `en`, `uk`, `ru` and `el`.
 2. **MRZ line 2** is parsed and checked against its own arithmetic — the document-number,
@@ -246,8 +301,9 @@ CREWLISTR_FIXTURES=/path/to/documents CREWLISTR_OUTPUT=./TestOutput swift test -
 
 ## Testing
 
-527 tests, no unexpected failures. Twenty are opt-in and skip unless their environment
-variable is set — they touch real identity documents or the live encrypted store.
+532 tests on macOS and 43 on the simulator, no unexpected failures. Twenty-one of the
+macOS tests are opt-in and skip unless their environment variable is set — they touch real
+identity documents, the live encrypted store, or write a file.
 
 | Suite | Covers |
 | --- | --- |
@@ -269,6 +325,10 @@ variable is set — they touch real identity documents or the live encrypted sto
 | `SQLCipherTests` | That the database file contains no plaintext |
 | `SpecimenGeneratorTests` | That the synthetic fixtures survive the real OCR pipeline |
 | `AppResourcesTests` | The icon asset, its macOS shape, and the release wiring |
+| `SharedInboxTests` *(iOS)* | What may be shared in, what a hostile file name cannot do, and the order a run of shares arrives in |
+| `DocumentIntakeTests` *(iOS)* | Each route in, that draining is a move, and that a shared passport arrives awaiting review |
+| `PlatformPipelineTests` *(iOS)* | Decoding, PDF rendering, rotation, the Core Text crew list read back, and that the database holds no plaintext |
+| `ScratchTests` *(iOS)* | That every plaintext file the app writes is erased by the path that made it, the path that failed, and the sweep at the next launch |
 | `CrewListGenerationTests` *(opt-in)* | The whole pipeline against real documents |
 | `SampleExportTests` *(opt-in)* | The documentation sample |
 | `DemoSeed` *(opt-in, destructive)* | Seeds or wipes the live store for screenshots |
@@ -329,6 +389,13 @@ CREWLISTR_FIXTURES=<dir>      # run the pipeline against real documents
 CREWLISTR_OUTPUT=<dir>        # where the generated crew list is written
 CREWLISTR_SAMPLE_OUT=<dir>    # write the documentation sample
 CREWLISTR_SEED_DEMO=1|wipe    # seed or clear the live store (destructive)
+CREWLISTR_SPECIMEN_OUT=<dir>  # write the fictional ICAO specimen passports
+```
+
+The iOS bundle runs on a simulator and is not part of `swift test`:
+
+```bash
+./scripts/ios.sh test
 ```
 
 ---
@@ -341,6 +408,12 @@ CREWLISTR_SEED_DEMO=1|wipe    # seed or clear the live store (destructive)
 | Original documents and revisions | `~/Library/Application Support/CrewListrPro/documents/` | AES-GCM |
 | Encryption key | Keychain, `com.tsevis.crewlisterpro` | `WhenUnlockedThisDeviceOnly` |
 | Model weights | `~/Library/Application Support/CrewListrPro/models/` | — |
+
+On iPhone and iPad the same four live in the app's own container, which iOS
+encrypts under a key the passcode releases; the encryption key is a Keychain
+item marked `WhenUnlockedThisDeviceOnly`, and the store is excluded from backup
+because a document restored without that key would be unreadable. See
+[`docs/ios.md`](docs/ios.md).
 
 Deleting a document or a trip erases the encrypted original and every revision from disk.
 
@@ -375,6 +448,7 @@ Sources/CrewListrProMac/
   DateFormats.swift      Voyage days vs. document dates, and the charter week
   Settings.swift         The operator's defaults, and the guards on them
   HeadlessExport.swift   The --export / --list command line
+  Platform.swift         PlatformImage/Color/Font, and decoding a page without one
   UI/
     AppShell.swift       App entry, the window shell, storage-failure view
     AppChrome.swift      Screen row, command line, panels and banners
@@ -391,6 +465,15 @@ Sources/CrewListrProMac/
     TripScreen.swift     Yacht, voyage dates and earlier versions
     CrewListScreen.swift Crew-list preview, blockers and export
     Design/              Theme, shared components and the brand assets
+Sources/CrewListrProiOS/    The iPhone and iPad interface, over those same files
+  App/                   The scene, the tabs, and what floats over all of them
+  Intake/                The share inbox, Photos, Files and the page scanner
+  Screens/               Charters, one charter, the review, the fleet, the crew
+  Design/                Rows and the share sheet
+Sources/CrewListrProShare/  The share extension: bytes in, inbox, and nothing else
+ios-project.yml          The iOS targets, generated by scripts/ios.sh
+scripts/ios.sh           Build, test, run, screenshot, and share a file in
+docs/ios.md              What had to be rewritten to leave the Mac, and why
 ```
 
 ---

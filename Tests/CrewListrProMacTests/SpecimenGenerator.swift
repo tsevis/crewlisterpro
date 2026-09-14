@@ -224,6 +224,23 @@ final class SpecimenGeneratorTests: XCTestCase {
         XCTAssertTrue(result.reasons.contains { $0.contains("No checksum-valid machine-readable zone") }, "\(result.reasons)")
     }
 
+    /// Writes the fictional passports somewhere they can be used.
+    ///
+    /// Opt-in, like every other test here that produces a file. It exists for
+    /// the iOS build: the share-sheet path can only be exercised end to end by
+    /// actually sharing a passport into it, and the one thing that must never
+    /// be used for that is a real one.
+    ///
+    ///     CREWLISTR_SPECIMEN_OUT=/tmp/specimens swift test --filter testWritesTheFictionalPassports
+    func testWritesTheFictionalPassports() throws {
+        guard let path = ProcessInfo.processInfo.environment["CREWLISTR_SPECIMEN_OUT"], !path.isEmpty else {
+            throw XCTSkip("Set CREWLISTR_SPECIMEN_OUT to write the specimen passports.")
+        }
+        let directory = URL(fileURLWithPath: path, isDirectory: true)
+        let written = try SpecimenGenerator.write(to: directory, includeDamagedScan: true)
+        XCTAssertFalse(written.isEmpty)
+    }
+
     /// Round-trips a rendered specimen through Vision to prove the fixture is
     /// legible to the same OCR path the app uses on a photographed passport.
     func testRenderedSpecimenSurvivesTheRealOCRPipeline() throws {

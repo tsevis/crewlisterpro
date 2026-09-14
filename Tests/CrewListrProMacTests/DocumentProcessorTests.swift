@@ -23,6 +23,18 @@ final class DocumentProcessorTests: XCTestCase {
         return output as Data
     }
 
+    /// Average brightness of a decoded image, 0 (black) to 1 (white).
+    private static func meanLuminance(_ data: Data) throws -> Double {
+        let image = try XCTUnwrap(PlatformImageCodec.decode(data))
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let context = try XCTUnwrap(CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8,
+                                              bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+                                              bitmapInfo: CGImageAlphaInfo.none.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return pixels.reduce(0.0) { $0 + Double($1) } / Double(pixels.count) / 255
+    }
+
     private static func pixelSize(_ data: Data) throws -> CGSize {
         let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
         let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
@@ -40,35 +52,48 @@ final class DocumentProcessorTests: XCTestCase {
         XCTAssertThrowsError(try DocumentProcessor.rotate(Data("not an image".utf8), degrees: 90))
     }
 
-    // MARK: - BUG-13: rotation does not preserve pixel dimensions
+    // MARK: - Rotation preserves the pixel grid
+    //
+    // Recorded here as BUG-13 while the implementation went through
+    // `NSImage.lockFocus`, which renders at the current display's backing
+    // scale: the same rotation returned 600×800 on a Retina Mac and 300×400 on
+    // an external display, and a full turn was not the identity. The Core
+    // Graphics context this file now makes is exactly the size it asks for.
 
     func testRotate90SwapsWidthAndHeightExactly() throws {
         let source = try Self.jpeg(width: 400, height: 300)
         let output = try DocumentProcessor.rotate(source, degrees: 90)
-        XCTExpectFailure("BUG-13: lockFocus() renders at the current display backing scale, so pixel dimensions are display-dependent")
         XCTAssertEqual(try Self.pixelSize(output), CGSize(width: 300, height: 400))
     }
 
     func testRotate360IsIdentityInSize() throws {
         let source = try Self.jpeg(width: 400, height: 300)
         let output = try DocumentProcessor.rotate(source, degrees: 360)
-        XCTExpectFailure("BUG-13: a full turn should return the same pixel grid")
         XCTAssertEqual(try Self.pixelSize(output), CGSize(width: 400, height: 300))
     }
 
-    // MARK: - BUG-14: every edit inflates the encrypted original into TIFF
+    /// Four presses of the one button in the interface.
+    func testFourQuarterTurnsReturnTheOriginalGrid() throws {
+        var data = try Self.jpeg(width: 640, height: 480)
+        for _ in 0..<4 { data = try DocumentProcessor.rotate(data, degrees: 90) }
+        XCTAssertEqual(try Self.pixelSize(data), CGSize(width: 640, height: 480))
+    }
+
+    // MARK: - An edit does not inflate the encrypted original
+    //
+    // BUG-14: `tiffRepresentation` returns uncompressed pixels, so a 300 KB
+    // photograph became a 3.6 MB revision — sealed, and kept beside every other
+    // revision of the same page forever. Revisions are written as JPEG now.
 
     func testRotateDoesNotBalloonTheStoredFile() throws {
         let source = try Self.jpeg(width: 1280, height: 960)
         let output = try DocumentProcessor.rotate(source, degrees: 90)
-        XCTExpectFailure("BUG-14: tiffRepresentation returns uncompressed pixels; each revision multiplies on-disk size")
         XCTAssertLessThan(output.count, source.count * 4, "\(source.count) bytes became \(output.count)")
     }
 
     func testEnhanceDoesNotBalloonTheStoredFile() throws {
         let source = try Self.jpeg(width: 1280, height: 960)
         let output = try DocumentProcessor.enhance(source)
-        XCTExpectFailure("BUG-14: enhance also returns uncompressed TIFF")
         XCTAssertLessThan(output.count, source.count * 4, "\(source.count) bytes became \(output.count)")
     }
 
@@ -99,18 +124,37 @@ final class DocumentProcessorTests: XCTestCase {
         XCTAssertThrowsError(try DocumentProcessor.crop(source, normalized: CGRect(x: 2, y: 2, width: 0.5, height: 0.5)))
     }
 
-    // MARK: - BUG-15: crop ignores a negative or zero-area request
+    // MARK: - A crop that would return nothing is refused
+    //
+    // BUG-15: a negative width used to normalise to an empty rectangle only by
+    // the luck of `.intersection`, and a crop that returns a blank page loses
+    // the operator their document.
 
     func testCropRejectsANegativeSizedRectangle() throws {
         let source = try Self.jpeg(width: 200, height: 200)
-        XCTExpectFailure("BUG-15: a negative width normalises to an empty rect only by luck of .intersection")
         XCTAssertThrowsError(try DocumentProcessor.crop(source, normalized: CGRect(x: 0.5, y: 0.5, width: -0.25, height: 0.25)))
+    }
+
+    func testCropRejectsAZeroAreaRectangle() throws {
+        let source = try Self.jpeg(width: 200, height: 200)
+        XCTAssertThrowsError(try DocumentProcessor.crop(source, normalized: CGRect(x: 0.5, y: 0.5, width: 0, height: 0.25)))
     }
 
     func testCropReturnsTheRequestedFraction() throws {
         let source = try Self.jpeg(width: 400, height: 400)
         let output = try DocumentProcessor.crop(source, normalized: CGRect(x: 0, y: 0, width: 0.5, height: 0.5))
-        XCTExpectFailure("BUG-13/BUG-15: lockFocus scaling makes the cropped pixel size display-dependent")
         XCTAssertEqual(try Self.pixelSize(output), CGSize(width: 200, height: 200))
+    }
+
+    /// The rectangle is measured from the top-left, the way `CGImage` measures
+    /// and the way a crop gesture on screen reports itself. The fixture paints
+    /// its one black square into the bottom-left quarter, so the top-left
+    /// quarter of it is white and the bottom-left quarter is not.
+    func testCropMeasuresFromTheTopLeft() throws {
+        let source = try Self.jpeg(width: 400, height: 400)
+        let top = try DocumentProcessor.crop(source, normalized: CGRect(x: 0, y: 0, width: 0.25, height: 0.25))
+        let bottom = try DocumentProcessor.crop(source, normalized: CGRect(x: 0, y: 0.75, width: 0.25, height: 0.25))
+        XCTAssertGreaterThan(try Self.meanLuminance(top), 0.9, "the top-left corner of the fixture is white")
+        XCTAssertLessThan(try Self.meanLuminance(bottom), 0.1, "the bottom-left corner of the fixture is black")
     }
 }
