@@ -76,7 +76,22 @@ struct TripScreen: View {
                                     set: { pickReturn($0) }
                                 ), range: current.departureDate...)
                                 FormRule()
-                                FormCaption("New trips already run \(charterRhythm). Moving the departure moves the return with it and keeps the charter the same length; pick a return date to override that.")
+                                FormRow(label: "Boarding time") {
+                                    CommitField(placeholder: "08:00", value: current.embarkationTime) { value in
+                                        store.setEmbarkationTime(value, onTripWith: current.id)
+                                    }
+                                    .frame(maxWidth: 90)
+                                }
+                                FormRule()
+                                FormRow(label: "Boarding port") {
+                                    CommitField(placeholder: "PIRAEUS", value: current.embarkationPort,
+                                                normalise: { $0.uppercased() }) { value in
+                                        store.setEmbarkationPort(value, onTripWith: current.id)
+                                    }
+                                    .frame(maxWidth: 220)
+                                }
+                                FormRule()
+                                FormCaption("New trips already run \(charterRhythm). Moving the departure moves the return with it and keeps the charter the same length; pick a return date to override that. Boarding time and port go on the passenger manifest.")
                             }
                         }
 

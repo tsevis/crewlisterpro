@@ -54,6 +54,7 @@ struct SettingsScreen: View {
                 Section {
                     Toggle("Printed crew list (PDF)", isOn: binding(\.writesPDF))
                     Toggle("Spreadsheet (CSV)", isOn: binding(\.writesCSV))
+                    Toggle("Passenger manifest (XLSX)", isOn: binding(\.writesManifest))
                     LabeledContent("File name starts with") {
                         CommitTextField(placeholder: AppSettings.defaultFileNamePrefix,
                                         value: settings.fileNamePrefix, uppercased: false,

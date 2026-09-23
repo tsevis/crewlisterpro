@@ -283,6 +283,24 @@ final class CrewStore {
         updateTrip(trip)
     }
 
+    /// Sets when passengers board. Returns false, saving nothing, when the
+    /// text is not a time — the field keeps what was there.
+    @discardableResult
+    func setEmbarkationTime(_ value: String, onTripWith id: UUID) -> Bool {
+        guard var trip = data.trips.first(where: { $0.id == id }),
+              let time = EmbarkationTime.normalised(value) else { return false }
+        trip.embarkationTime = time
+        updateTrip(trip)
+        return true
+    }
+
+    /// Upper-cased like the registry port, which is how the forms print it.
+    func setEmbarkationPort(_ value: String, onTripWith id: UUID) {
+        guard var trip = data.trips.first(where: { $0.id == id }) else { return }
+        trip.embarkationPort = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        updateTrip(trip)
+    }
+
     /// Puts a finished charter away. Destroys nothing.
     ///
     /// The trip, its documents, its people and the encrypted originals all stay
@@ -694,7 +712,8 @@ final class CrewStore {
                 let assigned = data.assignments.first { $0.tripID == tripID && $0.personID == document.personID }
                 return CrewListRow(document: document,
                                    role: assigned?.role ?? .passenger,
-                                   isClient: assigned?.isClient ?? false)
+                                   isClient: assigned?.isClient ?? false,
+                                   notes: assigned?.notes ?? "")
             }
             .sorted { lhs, rhs in
                 if lhs.role != rhs.role { return lhs.role == .skipper }
@@ -724,6 +743,11 @@ final class CrewStore {
         if settings.writesPDF {
             let url = directory.appending(path: "\(base).pdf")
             try ExportService.exportPDF(to: url, trip: trip, boat: boat, rows: rows, skipperEmail: email)
+            written.append(url)
+        }
+        if settings.writesManifest {
+            let url = directory.appending(path: "\(base).xlsx")
+            try PassengerManifest.export(to: url, trip: trip, rows: rows)
             written.append(url)
         }
         return written

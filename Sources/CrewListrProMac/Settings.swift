@@ -39,6 +39,8 @@ struct AppSettings: Codable, Hashable, Sendable {
 
     var writesCSV: Bool = true
     var writesPDF: Bool = true
+    /// The passenger manifest in the port authority's `.xlsx` template.
+    var writesManifest: Bool = true
 
     /// Where the export goes. Empty means ask every time, which stays the
     /// default: writing identity documents somewhere by habit is exactly the
@@ -79,7 +81,7 @@ struct AppSettings: Codable, Hashable, Sendable {
         // Export is a button that writes files. Both off would make it a button
         // that does nothing and says it succeeded; the printed form is the one
         // a port authority is actually handed, so that is the one that stays.
-        if !writesCSV, !writesPDF { copy.writesPDF = true }
+        if !writesCSV, !writesPDF, !writesManifest { copy.writesPDF = true }
         return copy
     }
 
@@ -93,20 +95,26 @@ struct AppSettings: Codable, Hashable, Sendable {
 
     /// What an export will write, in as few words as a button can carry.
     var exportFilesDescription: String {
-        switch (writesCSV, writesPDF) {
-        case (true, true): "CSV and PDF"
-        case (true, false): "CSV"
-        default: "PDF"
-        }
+        listed(exportedFiles.map(\.short))
     }
 
     /// The same fact in a sentence, for a help string or a panel's message.
     var exportDescription: String {
-        switch (writesCSV, writesPDF) {
-        case (true, true): "the crew list CSV and PDF"
-        case (true, false): "the crew list CSV"
-        default: "the crew list PDF"
-        }
+        listed(exportedFiles.map(\.long))
+    }
+
+    private var exportedFiles: [(short: String, long: String)] {
+        [(writesCSV, ("CSV", "the crew list CSV")),
+         (writesPDF, ("PDF", "the crew list PDF")),
+         (writesManifest, ("XLSX", "the passenger manifest XLSX"))]
+            .filter(\.0).map(\.1)
+    }
+
+    /// `A`, `A and B`, `A, B and C`.
+    private func listed(_ items: [String]) -> String {
+        guard let last = items.last else { return "" }
+        let rest = items.dropLast()
+        return rest.isEmpty ? last : "\(rest.joined(separator: ", ")) and \(last)"
     }
 
     /// The name of a weekday, for the picker and for saying what a new trip
@@ -136,6 +144,7 @@ extension AppSettings {
         decoded.fileNamePrefix = (try? container.decode(String.self, forKey: .fileNamePrefix)) ?? Self.defaultFileNamePrefix
         decoded.writesCSV = (try? container.decode(Bool.self, forKey: .writesCSV)) ?? true
         decoded.writesPDF = (try? container.decode(Bool.self, forKey: .writesPDF)) ?? true
+        decoded.writesManifest = (try? container.decode(Bool.self, forKey: .writesManifest)) ?? true
         decoded.exportFolderPath = (try? container.decode(String.self, forKey: .exportFolderPath)) ?? ""
         decoded.revealsAfterExport = (try? container.decode(Bool.self, forKey: .revealsAfterExport)) ?? true
         decoded.versionsKept = (try? container.decode(Int.self, forKey: .versionsKept)) ?? Self.defaultVersionsKept

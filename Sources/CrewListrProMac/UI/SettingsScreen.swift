@@ -156,6 +156,10 @@ struct SettingsScreen: View {
                         get: { settings.writesCSV },
                         set: { on in edit { $0.writesCSV = on } }
                     ))
+                    Toggle("XLSX — passenger manifest", isOn: Binding(
+                        get: { settings.writesManifest },
+                        set: { on in edit { $0.writesManifest = on } }
+                    ))
                 }
                 .toggleStyle(.checkbox)
                 .font(Theme.Font.support)
