@@ -2,7 +2,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUILD="$ROOT/.build/arm64-apple-macosx/release/CrewListrProMac"
+# Asked of SwiftPM rather than spelled out: the release products moved from
+# .build/arm64-apple-macosx/release to .build/out/Products/Release with a
+# toolchain update, and a hardcoded path failed after a successful build.
+BUILD="$(swift build -c release --package-path "$ROOT" --show-bin-path)/CrewListrProMac"
 OUTPUT="$ROOT/dist"
 APP="$OUTPUT/CrewListr Pro.app"
 INSTALLED="/Applications/CrewListr Pro.app"

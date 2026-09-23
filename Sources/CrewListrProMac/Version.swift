@@ -13,7 +13,7 @@ enum AppVersion {
     /// build compiled from these same files, and a version that did not move
     /// would leave the two claiming to be the same release when only one of
     /// them existed.
-    static let short = "0.4.0"
+    static let short = "0.5.0"
 
     /// Build number — CFBundleVersion. Monotonic, bumped by CI on every build.
     static let build = "1"
