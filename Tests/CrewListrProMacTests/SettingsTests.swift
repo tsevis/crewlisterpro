@@ -50,11 +50,12 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(settings.normalised().charterLengthDays, AppSettings.longestCharterDays)
     }
 
-    /// Turning both off would make Export a button that writes nothing.
+    /// Turning all three off would make Export a button that writes nothing.
     func testAtLeastOneFileIsAlwaysWritten() {
         var settings = AppSettings()
         settings.writesCSV = false
         settings.writesPDF = false
+        settings.writesManifest = false
 
         let normalised = settings.normalised()
         XCTAssertTrue(normalised.writesPDF, "the printed form is the one a port authority is handed")
@@ -158,6 +159,7 @@ final class SettingsTests: XCTestCase {
         let (store, directory) = try makeExportableStore()
         var settings = store.settings
         settings.writesCSV = false
+        settings.writesManifest = false
         store.updateSettings(settings)
 
         let written = try store.exportSelectedTrip(to: directory)
@@ -170,11 +172,20 @@ final class SettingsTests: XCTestCase {
         let (store, directory) = try makeExportableStore()
         var settings = store.settings
         settings.writesPDF = false
+        settings.writesManifest = false
         store.updateSettings(settings)
 
         let written = try store.exportSelectedTrip(to: directory)
 
         XCTAssertEqual(written.map(\.pathExtension), ["csv"])
+    }
+
+    func testTheManifestIsWrittenBesideTheCrewList() throws {
+        let (store, directory) = try makeExportableStore()
+
+        let written = try store.exportSelectedTrip(to: directory)
+
+        XCTAssertEqual(written.map(\.pathExtension), ["csv", "pdf", "xlsx"])
     }
 
     func testTheFileNamePrefixReachesTheWrittenFiles() throws {

@@ -114,6 +114,11 @@ struct Trip: Codable, Identifiable, Hashable {
     var returnDate: Date
     var status: TripStatus = .draft
 
+    /// When and where passengers board, for the passenger manifest. `HH:MM`
+    /// (see `EmbarkationTime`) and a port name; empty until the operator knows.
+    var embarkationTime: String = ""
+    var embarkationPort: String = ""
+
     var isArchived: Bool { status == .archived }
 }
 
@@ -141,6 +146,9 @@ extension Trip {
         // One `try?` covers both failures: the key being absent and the value
         // being a status this build has never heard of.
         status = (try? container.decode(TripStatus.self, forKey: .status)) ?? .draft
+        // Added with the passenger manifest, after trips were already on disk.
+        embarkationTime = (try? container.decode(String.self, forKey: .embarkationTime)) ?? ""
+        embarkationPort = (try? container.decode(String.self, forKey: .embarkationPort)) ?? ""
     }
 }
 
@@ -391,6 +399,8 @@ struct CrewListRow: Hashable, Identifiable, Sendable {
     var expiryDate: String
     var role: CrewRole
     var isClient: Bool
+    /// The assignment's own notes, carried to the passenger manifest's Notes.
+    var notes: String
 
     /// The birth date as the passport itself prints it — `16 DEC 1984`. The
     /// stored value stays ISO-8601, which is what the CSV and every validation
@@ -400,7 +410,7 @@ struct CrewListRow: Hashable, Identifiable, Sendable {
     /// stays ISO in the CSV, so there would be nothing to read it.
     var printedBirthDate: String { DocumentDate.display(birthDate) }
 
-    init(document: CrewDocument, role: CrewRole, isClient: Bool = false) {
+    init(document: CrewDocument, role: CrewRole, isClient: Bool = false, notes: String = "") {
         fullName = document[.fullName]
         documentNumber = document[.documentNumber]
         nationality = document[.nationality]
@@ -409,6 +419,7 @@ struct CrewListRow: Hashable, Identifiable, Sendable {
         expiryDate = document[.expiryDate]
         self.role = role
         self.isClient = isClient
+        self.notes = notes
     }
 }
 

@@ -293,7 +293,8 @@ enum HeadlessExport {
             let assignment = data.assignments.first { $0.tripID == trip.id && $0.personID == document.personID }
             return CrewListRow(document: document,
                                role: assignment?.role ?? .passenger,
-                               isClient: assignment?.isClient ?? false)
+                               isClient: assignment?.isClient ?? false,
+                               notes: assignment?.notes ?? "")
         }
         return rows.sorted { lhs, rhs in
             lhs.role == rhs.role ? lhs.fullName < rhs.fullName : lhs.role == .skipper
@@ -306,8 +307,10 @@ enum HeadlessExport {
         let csv = directory.appending(path: "\(base).csv")
         let pdf = directory.appending(path: "\(base).pdf")
         try ExportService.exportCSV(to: csv, trip: trip, boat: boat, rows: rows, skipperEmail: skipperEmail)
+        let xlsx = directory.appending(path: "\(base).xlsx")
         try ExportService.exportPDF(to: pdf, trip: trip, boat: boat, rows: rows, skipperEmail: skipperEmail)
-        return [csv, pdf]
+        try PassengerManifest.export(to: xlsx, trip: trip, rows: rows)
+        return [csv, pdf, xlsx]
     }
 
     // MARK: - Output

@@ -114,6 +114,18 @@ struct TripScreen: View {
                     get: { trip.returnDate },
                     set: { store.setReturnDate($0, onTripWith: trip.id) }
                 ), displayedComponents: .date)
+                LabeledContent("Boarding time") {
+                    CommitTextField(placeholder: "08:00", value: trip.embarkationTime, alignment: .trailing) { value in
+                        store.setEmbarkationTime(value, onTripWith: trip.id)
+                    }
+                    .keyboardType(.numbersAndPunctuation)
+                }
+                LabeledContent("Boarding port") {
+                    CommitTextField(placeholder: "PIRAEUS", value: trip.embarkationPort,
+                                    uppercased: true, alignment: .trailing) { value in
+                        store.setEmbarkationPort(value, onTripWith: trip.id)
+                    }
+                }
             }
 
             documentsSection
