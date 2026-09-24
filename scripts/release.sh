@@ -277,8 +277,33 @@ needed once notarization is in place.
 READMEEOF
 fi
 
+# The app is notarized and stapled on its own before it goes into the image.
+# A ticket stapled only to the image stays behind on the image: the copy
+# dragged into /Applications carries none, and Gatekeeper must then ask Apple
+# online at first launch — which fails on a Mac with no connection, the case
+# this offline app is built for. notarytool takes a zip, not a bundle.
+if (( NOTARIZE )); then
+  APP_ZIP="$OUTPUT/app-for-notarization.zip"
+  ditto -c -k --keepParent "$APP" "$APP_ZIP"
+  echo "Submitting the app to Apple before packaging it."
+  xcrun notarytool submit "$APP_ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+  rm -f "$APP_ZIP"
+  xcrun stapler staple "$APP"
+  xcrun stapler validate "$APP"
+fi
+
 "$ROOT/scripts/make-dmg.sh" "$APP" "$APP_NAME $SHORT_VERSION" "$DMG" "$READ_ME"
 [[ -n "$READ_ME" ]] && rm -f "$READ_ME"
+
+# The disk image is signed too, not only the app inside it. Notarizing and
+# stapling an unsigned image still passes `stapler validate`, but Gatekeeper
+# assesses the image itself as "rejected, no usable signature" — that is how
+# the first 0.5.0 image shipped. Signed before notarization, so the ticket
+# covers the signed image.
+if [[ "$SIGN_AS" != "-" ]]; then
+  codesign --force --timestamp --sign "$SIGN_AS" "$DMG"
+  codesign --verify --strict "$DMG"
+fi
 
 if (( NOTARIZE )); then
   "$ROOT/scripts/notarize.sh" "$DMG" "$NOTARY_PROFILE"
