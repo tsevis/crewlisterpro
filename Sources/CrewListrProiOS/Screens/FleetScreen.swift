@@ -244,18 +244,27 @@ struct CommitTextField: View {
             .textInputAutocapitalization(uppercased ? .characters : .sentences)
             .autocorrectionDisabled(uppercased)
             .submitLabel(.done)
-            .onSubmit { commit() }
+            // Done leaves the field rather than saving in place, so there is
+            // one commit path and it always runs unfocused — the condition the
+            // observer below needs to put the stored value back in the box.
+            .onSubmit { focused = false }
             .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
             .onChange(of: value) { _, newValue in if !focused { draft = newValue } }
             .onAppear { draft = value }
     }
 
+    /// Saves, then shows what the store kept — not what was typed.
+    ///
+    /// The store may refuse an edit (a boarding time of "noon") or rewrite it
+    /// ("8:00" kept as "08:00"). Showing `typed` left a refused value in the
+    /// box as if it had been saved. Showing `value` is right in every case: a
+    /// refusal leaves it as it was, and an accepted edit changes it, which the
+    /// `onChange(of: value)` observer then puts in the box.
     private func commit() {
         let typed = uppercased
             ? draft.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             : draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard typed != value else { draft = value; return }
-        onCommit(typed)
-        draft = typed
+        if typed != value { onCommit(typed) }
+        draft = value
     }
 }
