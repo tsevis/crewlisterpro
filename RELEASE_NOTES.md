@@ -1,3 +1,33 @@
+# CrewListr Pro 0.5.0
+
+**The passenger manifest, in the port authority's own template.** Every export
+now writes a third file beside the CSV and the PDF: an `.xlsx` laid out exactly
+like `passengers_manifest_template.xlsx` — one sheet, `Passengers`, and its nine
+bilingual columns in its order, from *Full Name / Ονοματεπώνυμο* to *Notes /
+Σημειώσεις*. Everyone aboard is on it; the skipper is marked `Skipper` in Notes.
+
+**Every cell is text**, as the template's instructions ask. Excel turns
+`2026-07-01` and `08:00` into numbers the importer cannot read, and a document
+number starting `00` into one that does not; none of that can happen to this
+file, and rows added to it in Excel afterwards stay text as well.
+
+**Nationality is written as the template's code.** `GREEK`, `grc`, `Ελληνική`
+and `HELLENIC` all become `GRC`, and the machine-readable zone's own spellings
+are translated too — Germany's `D` becomes `DEU`. The codes are the template's,
+not ISO's: Palestine is `TPO`, Kosovo `XKX`, stateless `XXX`. A nationality that
+cannot be matched is written as it was read rather than guessed, so the importer
+points at the right person.
+
+**A trip has a boarding time and a boarding port**, under the dates on the Trip
+screen on the Mac and in *The week* on iOS. `8:00`, `0800` and `08.00` are all
+kept as `08:00`; anything that is not a time is refused. Both may stay empty —
+the manifest's columns are then empty too, and nothing else is held up.
+
+**Settings → Export** has a third checkbox, *XLSX — passenger manifest*, on by
+default.
+
+---
+
 # CrewListr Pro 0.4.0
 
 **There is an iPhone and iPad app.** It is the same application, not a companion
@@ -173,7 +203,14 @@ on others.
 Open it and carry on; your existing trips, documents and confirmations are read
 as they are.
 
-Two things are worth knowing:
+From 0.5.0:
+
+- **Export writes three files**, the passenger manifest `.xlsx` beside the CSV
+  and PDF. Turn it off under Settings → Export if you do not need it.
+- **Existing trips have no boarding time or port.** Fill them in on the Trip
+  screen before exporting a manifest you mean to upload.
+
+Two things are worth knowing from earlier versions:
 
 - **The exported CSV has two new columns**, `skipper_email` and `is_client`.
   They are appended after the existing thirteen, so anything reading that file
@@ -194,7 +231,7 @@ require SQLCipher to be compiled from source for x86_64 first.
 
 ## Install
 
-1. Open `CrewListr-Pro-0.2.0.dmg`.
+1. Open `CrewListr-Pro-0.5.0.dmg`.
 2. Drag **CrewListr Pro** onto the Applications folder.
 3. Open it from Applications.
 
