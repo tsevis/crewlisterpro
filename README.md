@@ -331,10 +331,20 @@ identity documents, the live encrypted store, or write a file.
 | `ScratchTests` *(iOS)* | That every plaintext file the app writes is erased by the path that made it, the path that failed, and the sweep at the next launch |
 | `CrewListGenerationTests` *(opt-in)* | The whole pipeline against real documents |
 | `SampleExportTests` *(opt-in)* | The documentation sample |
-| `DemoSeed` *(opt-in, destructive)* | Seeds or wipes the live store for screenshots |
 
 ```bash
 swift test --enable-code-coverage
+```
+
+`Tests/CrewListrProMacTests/Maintenance/` holds tools, not tests: `DemoSeed`
+seeds or wipes the live store for screenshots, `StoreRecovery` rebuilds it from
+source documents, `LiveStoreReview` applies a review pass or prunes empty trips,
+and `OrphanAudit` lists sealed files nothing references. They are XCTest cases
+only to reach the module's internals. `swift test` does not compile them unless
+`CREWLISTR_MAINTENANCE=1` is set, and each one still needs its own variable too:
+
+```bash
+CREWLISTR_MAINTENANCE=1 CREWLISTR_SEED_DEMO=1 swift test --filter DemoSeed
 ```
 
 ### Clicking the app
@@ -388,6 +398,7 @@ Opt-in switches:
 CREWLISTR_FIXTURES=<dir>      # run the pipeline against real documents
 CREWLISTR_OUTPUT=<dir>        # where the generated crew list is written
 CREWLISTR_SAMPLE_OUT=<dir>    # write the documentation sample
+CREWLISTR_MAINTENANCE=1       # compile the Maintenance/ tools at all
 CREWLISTR_SEED_DEMO=1|wipe    # seed or clear the live store (destructive)
 CREWLISTR_SPECIMEN_OUT=<dir>  # write the fictional ICAO specimen passports
 ```
