@@ -31,7 +31,7 @@ final class ExportServiceTests: XCTestCase {
                     returnDate: calendar.date(from: DateComponents(year: 2025, month: 9, day: 8))!)
     }
 
-    private func row(_ name: String, number: String = "W1357924D", nationality: String = "UKRAINIAN",
+    private func row(_ name: String, number: String = "W1357924D", nationality: String = "UTOPIAN",
                      birth: String = "1987-05-12", sex: String = "F", expiry: String = "2028-03-14",
                      role: CrewRole = .passenger) -> CrewListRow {
         var document = CrewDocument(tripID: UUID(), personID: UUID(), originalName: "\(number).jpeg", encryptedFileName: "\(number).bin")

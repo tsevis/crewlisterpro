@@ -43,9 +43,9 @@ final class MRZTests: XCTestCase {
         // The issuer code sits at 10..12 and is covered by no check digit the
         // parser verifies, so it can be swapped without disturbing the fixture.
         var characters = Array(MRZFixtures.adult.line2)
-        characters.replaceSubrange(10...12, with: "UKR")
+        characters.replaceSubrange(10...12, with: "GRC")
         let line2 = String(characters)
-        XCTAssertEqual(MRZ.parse("\(MRZFixtures.adult.line1)\n\(line2)")?["nationality"], "UKRAINIAN")
+        XCTAssertEqual(MRZ.parse("\(MRZFixtures.adult.line1)\n\(line2)")?["nationality"], "GREEK")
     }
 
     func testKeepsUnknownNationalityCodeVerbatim() {
