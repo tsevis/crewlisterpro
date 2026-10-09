@@ -4,9 +4,9 @@ import XCTest
 
 /// Reading the name off line 1 when the camera did not give a clean one.
 ///
-/// The shapes here are the ones measured on real passports: a line that lost
+/// The shapes here are ones seen in practice: a line that lost
 /// its `P<XXX` prefix, a line the recogniser cut short, and a line with digits
-/// smeared through it. Names are invented for the test; the failures are not.
+/// smeared through it. Names are invented for the test.
 final class MRZNameRecoveryTests: XCTestCase {
 
     // MARK: - Where the name starts

@@ -3,12 +3,10 @@ import Foundation
 /// Machine-readable zones used across the MRZ tests.
 ///
 /// Every specimen here is **fictional**, on the ICAO 9303 utopian issuer code
-/// `UTO`, with check digits computed rather than transcribed. An earlier version
-/// of this file carried the real machine-readable zones of six Ukrainian
-/// passports — real names and real document numbers — which had no business in
-/// source control. The shapes that matter for the parser are reproduced instead:
-/// an expiry beyond the old century pivot, a minor, an adult, and the four ways
-/// a photographed name line comes back damaged.
+/// `UTO`, with check digits computed rather than transcribed. The shapes that
+/// matter for the parser are reproduced: an expiry beyond the old century
+/// pivot, a minor, an adult, and the four ways a photographed name line comes
+/// back damaged.
 ///
 /// To exercise the pipeline against genuine documents, point
 /// `CREWLISTR_FIXTURES` at a directory of them — see `CrewListGenerationTests`.
@@ -46,11 +44,11 @@ enum MRZFixtures {
     static let expiring2035 = Specimen(
         label: "X1234567A / LINDQVIST",
         line1: "P<UTOLINDQVIST<<ERIK<<<<<<<<<<<<<<<<<<<<<<<<",
-        line2: "X1234567A7UTO8204055M3507038<<<<<<<<<<<<<<06",
+        line2: "X1234567A7UTO8311210M3502192<<<<<<<<<<<<<<08",
         expectedName: "ERIK LINDQVIST",
         expectedNumber: "X1234567A",
-        expectedBirth: "1982-04-05",
-        expectedExpiry: "2035-07-03",
+        expectedBirth: "1983-11-21",
+        expectedExpiry: "2035-02-19",
         expectedSex: "M"
     )
 
@@ -58,11 +56,11 @@ enum MRZFixtures {
     static let expiring2031 = Specimen(
         label: "Y7654321B / MARCHETTI",
         line1: "P<UTOMARCHETTI<<SOFIA<<<<<<<<<<<<<<<<<<<<<<<",
-        line2: "Y7654321B3UTO9006290F3109306<<<<<<<<<<<<<<00",
+        line2: "Y7654321B3UTO9102170F3112087<<<<<<<<<<<<<<04",
         expectedName: "SOFIA MARCHETTI",
         expectedNumber: "Y7654321B",
-        expectedBirth: "1990-06-29",
-        expectedExpiry: "2031-09-30",
+        expectedBirth: "1991-02-17",
+        expectedExpiry: "2031-12-08",
         expectedSex: "F"
     )
 
@@ -70,22 +68,22 @@ enum MRZFixtures {
     static let minor = Specimen(
         label: "Z2468013C / HALVORSEN",
         line1: "P<UTOHALVORSEN<<INGRID<<<<<<<<<<<<<<<<<<<<<<",
-        line2: "Z2468013C9UTO1303096F2905280<<<<<<<<<<<<<<06",
+        line2: "Z2468013C9UTO1406023F2911179<<<<<<<<<<<<<<06",
         expectedName: "INGRID HALVORSEN",
         expectedNumber: "Z2468013C",
-        expectedBirth: "2013-03-09",
-        expectedExpiry: "2029-05-28",
+        expectedBirth: "2014-06-02",
+        expectedExpiry: "2029-11-17",
         expectedSex: "F"
     )
 
     static let adult = Specimen(
         label: "W1357924D / NAKAMURA",
         line1: "P<UTONAKAMURA<<YUKI<<<<<<<<<<<<<<<<<<<<<<<<<",
-        line2: "W1357924D4UTO8412162F2707222<<<<<<<<<<<<<<02",
+        line2: "W1357924D4UTO8705127F2803146<<<<<<<<<<<<<<00",
         expectedName: "YUKI NAKAMURA",
         expectedNumber: "W1357924D",
-        expectedBirth: "1984-12-16",
-        expectedExpiry: "2027-07-22",
+        expectedBirth: "1987-05-12",
+        expectedExpiry: "2028-03-14",
         expectedSex: "F"
     )
 

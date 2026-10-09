@@ -143,7 +143,7 @@ final class CrewListGenerationTests: XCTestCase {
                 XCTAssertTrue(extraction.document.blockingFields().contains(.fullName), extraction.file.lastPathComponent)
             }
         }
-        // Half the MIO set has a readable name line; the rest is glare and crop.
+        // Half the supplied set has a readable name line; the rest is glare and crop.
         // Recovering three and refusing to guess the other three is the correct
         // outcome — an earlier build "recovered" four by accepting OCR debris.
         let named = extractions.filter { !$0.document[.fullName].isEmpty }
@@ -259,7 +259,7 @@ final class CrewListGenerationTests: XCTestCase {
         let csv = String(decoding: try Data(contentsOf: output.appending(path: "\(base).csv")).dropFirst(3), as: UTF8.self)
         print("""
 
-        ===== CREW LIST FROM THE REAL MIO SET =====
+        ===== CREW LIST FROM THE SUPPLIED SET =====
         \(csv)
         ----- typed by the operator (\(applied.count)) -----
         \(applied.isEmpty ? "none" : applied.joined(separator: "\n"))

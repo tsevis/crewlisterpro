@@ -89,13 +89,13 @@ actor LlamaVisionRescuer {
     /// What the model asks for, built from `CrewField.rescuable` so the request
     /// and the filter below cannot drift apart.
     ///
-    /// Deliberately minimal, after measuring four versions against real
-    /// passports. Every instruction added to steer the NAME changed how the
+    /// Deliberately minimal, after measuring four versions against trial
+    /// documents. Every instruction added to steer the NAME changed how the
     /// model read the rest of the image:
     ///
     ///   name asked for, no steering   names in Cyrillic
     ///   "give the Latin form"         one document perfect; the other invented
-    ///                                 MIHCHYK for a page printing MINCHUK
+    ///                                 PRYKLADEHKO for a page printing PRYKLADENKO
     ///   "copy, do not transliterate"  the invented name stopped, but the
     ///                                 document that had been perfect came back
     ///                                 with June read as April — a field the
@@ -106,19 +106,18 @@ actor LlamaVisionRescuer {
     /// reading.
     ///
     /// The dates were asked for until they were checked. Against the app's own
-    /// MRZ-derived export of the same documents, three of ten date values were
-    /// wrong — 2027-07-22 read as 2022-07-27, 2029-05-28 as 2028-05-29,
-    /// 2013-03-09 as 2013-09-13 — while the document number was right on all
-    /// five. A transposed date is still a valid date, so no validator here can
+    /// MRZ-derived values for the same documents, three of ten date values were
+    /// wrong — an expiry 2028-03-14 read as 2014-03-28, an expiry 2031-08-28 as
+    /// 2028-08-31, a birth date 2014-06-02 as 2014-02-06 — while the document
+    /// number was right on all five. A transposed date is still a valid date, so no validator here can
     /// object, and to this software a suggested date that validates looks
     /// exactly like a confirmed one. That is why the request is now one field.
     ///
     /// Narrowing the prompt made it a fifth version, so it was measured too:
-    /// the same five passports returned exactly one field each, and all five
-    /// document numbers match the export — FH010367, FH007206, GL720738,
-    /// GB262590, GL975714. Five versions in, that is the first result checked
-    /// against something with check digits behind it rather than against
-    /// another run of the same model.
+    /// the same five documents returned exactly one field each, and all five
+    /// document numbers match the export. Five versions in, that is the first
+    /// result checked against something with check digits behind it rather than
+    /// against another run of the same model.
     static let prompt = """
         Read only clearly visible identity-document fields. Reply with JSON keys \
         \(CrewField.rescuable.map(\.rawValue).joined(separator: ", ")).\(dateFormatInstruction) \
@@ -173,8 +172,8 @@ actor LlamaVisionRescuer {
 
     /// The Latin half of a bilingual field, or nil when there is not one.
     ///
-    /// Passports print fields twice: "ЦИГІПА/TSYHIPA", "УКРАЇНА/UKRAINE",
-    /// "Ж/F". Measured against two real Ukrainian passports, the model
+    /// Passports print some fields twice, in the local script and in Latin:
+    /// "ПРИКЛАДЕНКО/PRYKLADENKO", "УТОПІЯ/UTOPIA", "Ж/F". In trials the model
     /// transcribes both halves verbatim, and the consequences are not equal.
     /// "Ж/F" fails validation, so the operator retypes it — visible and safe.
     /// A Cyrillic full_name PASSES: no digits, long enough, no repeated-letter
@@ -183,9 +182,9 @@ actor LlamaVisionRescuer {
     ///
     /// So the Latin side is taken per word — the halves pair up word by word,
     /// not across the whole field — and anything still not Latin afterwards
-    /// returns nil for the caller to drop. On one of those passports the model
-    /// answered "МІНЧУК/МИНЧУК", two Cyrillic spellings where the page prints
-    /// "МІНЧУК/MINCHUK", one of them invented. No name is better than a name
+    /// returns nil for the caller to drop. On one trial document the model
+    /// answered "ПРИКЛАДЕНКО/ПРІКЛАДЕНКО", two Cyrillic spellings where the page
+    /// prints "ПРИКЛАДЕНКО/PRYKLADENKO", one of them invented. No name is better than a name
     /// that cannot go on the list, and far better than an invented one that can.
     ///
     /// The name is no longer rescued at all — see `CrewField.rescuable` — so

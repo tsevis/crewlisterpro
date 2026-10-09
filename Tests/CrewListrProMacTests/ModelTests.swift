@@ -13,9 +13,9 @@ final class ModelTests: XCTestCase {
         document[.fullName] = "YUKI NAKAMURA"
         document[.documentNumber] = "W1357924D"
         document[.nationality] = "UKRAINIAN"
-        document[.birthDate] = "1984-12-16"
+        document[.birthDate] = "1987-05-12"
         document[.sex] = "F"
-        document[.expiryDate] = "2027-07-22"
+        document[.expiryDate] = "2028-03-14"
         return document
     }
 
@@ -105,7 +105,7 @@ final class ModelTests: XCTestCase {
     }
 
     func testImpossibleCalendarDatesAreRejected() {
-        for value in ["1974-99-12", "1984-02-31", "not-a-date", "84-12-16", "1984/12/16"] {
+        for value in ["1974-99-12", "1987-02-31", "not-a-date", "87-05-12", "1987/05/12"] {
             XCTAssertTrue(CrewFieldValidator.validate(.birthDate, value: value, today: today).isBlocking, value)
         }
     }
@@ -123,7 +123,7 @@ final class ModelTests: XCTestCase {
     }
 
     func testAValidFutureExpiryPasses() {
-        XCTAssertEqual(CrewFieldValidator.validate(.expiryDate, value: "2035-07-03", today: today), .valid)
+        XCTAssertEqual(CrewFieldValidator.validate(.expiryDate, value: "2035-02-19", today: today), .valid)
     }
 
     func testSexAcceptsOnlyMFX() {
@@ -159,7 +159,7 @@ final class ModelTests: XCTestCase {
         document[.fullName] = "CORRECTED NAME"
         let row = CrewListRow(document: document, role: .skipper)
         XCTAssertEqual(row.fullName, "CORRECTED NAME")
-        XCTAssertEqual(row.birthDate, "1984-12-16")
+        XCTAssertEqual(row.birthDate, "1987-05-12")
         XCTAssertEqual(row.role, .skipper)
     }
 
@@ -225,7 +225,7 @@ extension ModelTests {
     }
 
     func testAPlainLatinNamePasses() {
-        XCTAssertEqual(nameCheck("DARIA TSYHIPA"), .valid)
+        XCTAssertEqual(nameCheck("MYATA PRYKLADENKO"), .valid)
         XCTAssertEqual(nameCheck("Anna Maria Eriksson"), .valid)
     }
 
@@ -246,30 +246,30 @@ extension ModelTests {
     /// The measured failure: the local model returned the Cyrillic printed on
     /// the page, which was legitimate there and unusable on a crew list.
     func testANameInAnotherScriptIsBlocked() {
-        for name in ["ЦИГІПА ДАР'Я", "МІНЧУК ОЛЕКСАНДР", "ΠΑΠΑΔΟΠΟΥΛΟΣ", "山田太郎"] {
+        for name in ["ПРИКЛАДЕНКО М'ЯТА", "ЗРАЗКОВИЙ ТЕСТ", "ΠΑΠΑΔΟΠΟΥΛΟΣ", "山田太郎"] {
             XCTAssertTrue(nameCheck(name).isBlocking, "\(name) reached the crew list")
         }
     }
 
     /// A name half-transliterated is the dangerous shape — it looks converted.
     func testAMixedScriptNameIsBlocked() {
-        XCTAssertTrue(nameCheck("TSYHIPA ДАР'Я").isBlocking)
+        XCTAssertTrue(nameCheck("PRYKLADENKO М'ЯТА").isBlocking)
     }
 
     func testTheMessageNamesTheOffendingCharacter() {
-        guard case .invalid(let message) = nameCheck("ЦИГІПА DARIA") else {
+        guard case .invalid(let message) = nameCheck("ПРИКЛАДЕНКО MYATA") else {
             return XCTFail("expected a blocking result")
         }
-        XCTAssertTrue(message.contains("Ц"), "the operator is not shown what to fix: \(message)")
+        XCTAssertTrue(message.contains("П"), "the operator is not shown what to fix: \(message)")
         XCTAssertTrue(message.contains("Latin"), message)
     }
 
     /// Blocking beats warning here: a crew list with a name nobody at the port
     /// can read is not a crew list, so it must not be confirmable.
     func testAScriptFailureBlocksRatherThanWarns() {
-        XCTAssertFalse(nameCheck("МІНЧУК").isBlocking == false)
+        XCTAssertFalse(nameCheck("ЗРАЗКОВИЙ").isBlocking == false)
         var document = completeDocument()
-        document.fields[CrewField.fullName.rawValue] = "МІНЧУК ОЛЕКСАНДР"
+        document.fields[CrewField.fullName.rawValue] = "ЗРАЗКОВИЙ ТЕСТ"
         verifyAll(&document)
         XCTAssertFalse(document.canExport(today: today), "a non-Latin name rode a stale confirmation onto the list")
     }

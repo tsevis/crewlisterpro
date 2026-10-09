@@ -184,7 +184,7 @@ zone's second line, which carries check digits; the name is the only thing the
 first line holds, and it has no arithmetic behind it. That line now gets a
 second, closer look when the first pass misses it, and every reading the
 recogniser proposed is considered rather than only the likeliest. Measured
-against six real passports: three names before, five after. The sixth stays
+against six trial passports: three names before, five after. The sixth stays
 blank, correctly — its name line came back with digits in it, and deciding which
 letters those were would be inventing a name.
 
@@ -195,8 +195,8 @@ against the shapes OCR genuinely confuses otherwise — and a nationality that
 still contains a digit is refused rather than quietly confirmed.
 
 Hungarian and Romanian were also missing from the recogniser's languages, which
-is the likeliest reason extraction was good on Ukrainian passports and mediocre
-on others.
+is the likeliest reason extraction was mediocre on passports from those
+countries.
 
 ## Upgrading
 

@@ -44,7 +44,7 @@ final class VoyageAndClientTests: XCTestCase {
         document[.fullName] = name
         document[.documentNumber] = "W1357924D"
         document[.nationality] = "UTOPIAN"
-        document[.birthDate] = "1984-12-16"
+        document[.birthDate] = "1987-05-12"
         document[.sex] = "F"
         return document
     }

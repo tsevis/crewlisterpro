@@ -50,7 +50,7 @@ final class CrewLibraryTests: XCTestCase {
         document[.documentNumber] = number
         document[.documentType] = "passport"
         document[.nationality] = "JPN"
-        document[.birthDate] = "1984-12-16"
+        document[.birthDate] = "1987-05-12"
         document[.sex] = "F"
         document[.expiryDate] = "2034-12-16"
         document.verifiedFields = Set(CrewField.requiredForExport.map(\.rawValue))
@@ -76,7 +76,7 @@ final class CrewLibraryTests: XCTestCase {
         XCTAssertEqual(saved.fullName, "YUKI NAKAMURA")
         XCTAssertEqual(saved.documentNumber, "TR1234567")
         XCTAssertEqual(saved[.nationality], "JPN")
-        XCTAssertEqual(saved[.birthDate], "1984-12-16")
+        XCTAssertEqual(saved[.birthDate], "1987-05-12")
         XCTAssertEqual(saved.role, .skipper, "the library is mostly skippers; it has to remember which")
         XCTAssertEqual(saved.email, "yuki@example.com")
         XCTAssertNotNil(saved.confirmedAt, "a fully confirmed document was kept as though it were not")
@@ -181,7 +181,7 @@ final class CrewLibraryTests: XCTestCase {
         let added = try XCTUnwrap(store.data.documents.first { $0.tripID == next })
         XCTAssertEqual(added[.fullName], "YUKI NAKAMURA")
         XCTAssertEqual(added[.documentNumber], "TR1234567")
-        XCTAssertEqual(added[.birthDate], "1984-12-16")
+        XCTAssertEqual(added[.birthDate], "1987-05-12")
         XCTAssertFalse(added.encryptedFileName.isEmpty, "the scan did not come with them")
         let image = try await secure.readOriginal(named: added.encryptedFileName)
         XCTAssertEqual(String(decoding: image, as: UTF8.self), "a passport photograph")

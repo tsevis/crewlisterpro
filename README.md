@@ -276,9 +276,9 @@ documents.
 
 ---
 
-## Results on a real document set
+## Results on a trial document set
 
-Six real Ukrainian passports (five phone photographs, one PDF scan — two of them
+Six passports (five phone photographs, one PDF scan — two of them
 photographed sideways, three with a damaged MRZ name line):
 
 | Outcome | Count |

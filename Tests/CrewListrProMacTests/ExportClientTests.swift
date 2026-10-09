@@ -32,7 +32,7 @@ final class ExportClientTests: XCTestCase {
                     returnDate: calendar.date(from: DateComponents(year: 2026, month: 9, day: 5))!)
     }
 
-    private func row(_ name: String, number: String = "W1357924D", birth: String = "1984-12-16",
+    private func row(_ name: String, number: String = "W1357924D", birth: String = "1987-05-12",
                      role: CrewRole = .passenger, isClient: Bool = false) -> CrewListRow {
         var document = CrewDocument(tripID: UUID(), personID: UUID(), originalName: "\(number).jpeg", encryptedFileName: "\(number).bin")
         document[.fullName] = name
@@ -40,7 +40,7 @@ final class ExportClientTests: XCTestCase {
         document[.nationality] = "UKRAINIAN"
         document[.birthDate] = birth
         document[.sex] = "F"
-        document[.expiryDate] = "2027-07-22"
+        document[.expiryDate] = "2028-03-14"
         return CrewListRow(document: document, role: role, isClient: isClient)
     }
 
@@ -75,14 +75,14 @@ final class ExportClientTests: XCTestCase {
     // MARK: - Three-letter months
 
     func testThePDFPrintsBirthDatesTheWayAPassportDoes() throws {
-        let text = try pdfText([row("YUKI NAKAMURA", birth: "1984-12-16", role: .skipper)], name: "birth.pdf")
-        XCTAssertTrue(text.contains("16 DEC 1984"), "birth date not printed as on the document:\n\(text)")
+        let text = try pdfText([row("YUKI NAKAMURA", birth: "1987-05-12", role: .skipper)], name: "birth.pdf")
+        XCTAssertTrue(text.contains("12 MAY 1987"), "birth date not printed as on the document:\n\(text)")
     }
 
     func testTheCSVKeepsBirthDatesISO() throws {
-        let text = try csv([row("YUKI NAKAMURA", birth: "1984-12-16")])
-        XCTAssertTrue(text.contains("1984-12-16"), text)
-        XCTAssertFalse(text.contains("16 DEC 1984"), "the CSV must stay machine-readable:\n\(text)")
+        let text = try csv([row("YUKI NAKAMURA", birth: "1987-05-12")])
+        XCTAssertTrue(text.contains("1987-05-12"), text)
+        XCTAssertFalse(text.contains("12 MAY 1987"), "the CSV must stay machine-readable:\n\(text)")
     }
 
     // MARK: - The client

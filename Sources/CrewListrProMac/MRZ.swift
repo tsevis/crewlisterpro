@@ -117,7 +117,7 @@ enum MRZ {
     /// the three-letter issuing state. Dropping five unconditionally is what
     /// the parser used to do, and on a photograph where the recogniser missed
     /// the `P<HUN` altogether it ate the first five letters of the surname
-    /// instead — measured on a real passport, where it turned an eight-letter
+    /// instead — seen on a trial photograph, where it turned an eight-letter
     /// surname into three.
     ///
     /// So the prefix is identified rather than assumed, using the issuing state

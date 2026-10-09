@@ -2,10 +2,10 @@ import Foundation
 import XCTest
 @testable import CrewListrProMac
 
-/// What the model returned from two real Ukrainian passports, and why passing
+/// What the model returned from two trial passports, and why passing
 /// it through unchanged was unsafe.
 ///
-/// Passports print fields twice — "ЦИГІПА/TSYHIPA" — and the model transcribes
+/// Passports print fields twice — "ПРИКЛАДЕНКО/PRYKLADENKO" — and the model transcribes
 /// both halves. The consequences are not equal. "Ж/F" fails validation, so the
 /// operator retypes it: visible, annoying, safe. A Cyrillic full_name PASSES
 /// validation — no digits, long enough, no repeated-letter run — so it can be
@@ -16,25 +16,25 @@ final class RescuedNameTests: XCTestCase {
     // MARK: - What was actually measured
 
     func testTheLatinHalfIsTakenWordByWord() {
-        // GB262590, as returned by the model.
-        XCTAssertEqual(LlamaVisionRescuer.latinised("ЦИГІПА/TSYHIPA DAP'Я/DARIA"), "TSYHIPA DARIA")
+        // As returned by the model: both halves of each word.
+        XCTAssertEqual(LlamaVisionRescuer.latinised("ПРИКЛАДЕНКО/PRYKLADENKO М'ЯТА/MYATA"), "PRYKLADENKO MYATA")
     }
 
     func testBilingualNationalityAndSexAreReduced() {
-        XCTAssertEqual(LlamaVisionRescuer.latinised("УКРАЇНА/UKRAINE"), "UKRAINE")
+        XCTAssertEqual(LlamaVisionRescuer.latinised("УТОПІЯ/UTOPIA"), "UTOPIA")
         XCTAssertEqual(LlamaVisionRescuer.latinised("Ж/F"), "F")
         XCTAssertEqual(LlamaVisionRescuer.latinised("Ч/M"), "M")
     }
 
-    /// FH010367: the page prints "МІНЧУК/MINCHUK" and the model answered
-    /// "МІНЧУК/МИНЧУК" — two Cyrillic spellings, one of them invented. There is
+    /// The page prints "ПРИКЛАДЕНКО/PRYKLADENKO" and the model answered
+    /// "ПРИКЛАДЕНКО/ПРІКЛАДЕНКО" — two Cyrillic spellings, one of them invented. There is
     /// no Latin half to take, so nothing is offered.
     func testAnInventedCyrillicVariantIsRefusedRatherThanPassedOn() {
-        XCTAssertNil(LlamaVisionRescuer.latinised("МІНЧУК/МИНЧУК ОЛЕКСАНДР"))
+        XCTAssertNil(LlamaVisionRescuer.latinised("ПРИКЛАДЕНКО/ПРІКЛАДЕНКО М'ЯТА"))
     }
 
     func testAWhollyNonLatinValueIsRefused() {
-        XCTAssertNil(LlamaVisionRescuer.latinised("ОЛЕКСАНДР"))
+        XCTAssertNil(LlamaVisionRescuer.latinised("М'ЯТА"))
         XCTAssertNil(LlamaVisionRescuer.latinised(""))
     }
 
@@ -52,7 +52,7 @@ final class RescuedNameTests: XCTestCase {
     /// A name is not a number, and a value with digits in it is not a name the
     /// MRZ parser would accept either.
     func testDigitsAreNotAcceptedAsALatinName() {
-        XCTAssertNil(LlamaVisionRescuer.latinised("MINCHUK 12345"))
+        XCTAssertNil(LlamaVisionRescuer.latinised("PRYKLADENKO 12345"))
     }
 
     /// But a document number is mostly digits. Excluding them everywhere
@@ -60,7 +60,7 @@ final class RescuedNameTests: XCTestCase {
     /// caught by running the real model, not by any unit test here.
     func testADocumentNumberKeepsItsDigits() {
         XCTAssertEqual(LlamaVisionRescuer.latinised("AB1234567", allowingDigits: true), "AB1234567")
-        XCTAssertEqual(LlamaVisionRescuer.latinised("GB262590", allowingDigits: true), "GB262590")
+        XCTAssertEqual(LlamaVisionRescuer.latinised("QX654321", allowingDigits: true), "QX654321")
     }
 
     func testADocumentNumberIsStillRefusedIfItIsNotLatin() {
@@ -79,7 +79,7 @@ final class RescuedNameTests: XCTestCase {
     /// since decided a crew list carries Latin only, so validation blocks it too
     /// and `latinised()` is no longer the sole guard. Both now hold the line.
     func testACyrillicNameIsBlockedByValidationAsWell() {
-        let validation = CrewFieldValidator.validate(.fullName, value: "ЦИГІПА ДАР'Я")
+        let validation = CrewFieldValidator.validate(.fullName, value: "ПРИКЛАДЕНКО М'ЯТА")
         XCTAssertTrue(validation.isBlocking,
                       "a crew list carries the Latin spelling; validation must refuse anything else")
     }

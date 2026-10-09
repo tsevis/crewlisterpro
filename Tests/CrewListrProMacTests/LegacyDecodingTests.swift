@@ -103,7 +103,7 @@ final class LegacyDecodingTests: XCTestCase {
         {"id":"\#(UUID().uuidString)","tripID":"\#(UUID().uuidString)","personID":"\#(UUID().uuidString)",
          "originalName":"p.jpeg","encryptedFileName":"a.bin",
          "fields":{"full_name":"YUKI NAKAMURA","document_number":"W1357924D","nationality":"UTOPIAN",
-                   "birth_date":"1984-12-16","sex":"F","expiry_date":"2031-01-01"}}
+                   "birth_date":"1987-05-12","sex":"F","expiry_date":"2031-01-01"}}
         """#
         let document = try decode(CrewDocument.self, json)
         XCTAssertFalse(document.canExport(), "an unreadable confirmation set must block, not clear")
