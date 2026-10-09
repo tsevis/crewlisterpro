@@ -192,7 +192,7 @@ struct CrewDocument: Codable, Identifiable, Hashable {
     /// The distinction is not decorative. An MRZ value has check digits behind
     /// it; a model's value has nothing behind it but a photograph, and on a
     /// damaged document it can be confidently wrong in a way that looks right —
-    /// measured: a passport printing MINCHUK produced MIHCHYK, pure ASCII,
+    /// measured: a passport printing PRYKLADENKO produced PRYKLADEHKO, pure ASCII,
     /// passing every validation rule there is. The operator confirming it is
     /// looking at the same unreadable line the model guessed from, so the
     /// interface has to tell them which values carry no arithmetic.
@@ -402,7 +402,7 @@ struct CrewListRow: Hashable, Identifiable, Sendable {
     /// The assignment's own notes, carried to the passenger manifest's Notes.
     var notes: String
 
-    /// The birth date as the passport itself prints it — `16 DEC 1984`. The
+    /// The birth date as the passport itself prints it — `12 MAY 1987`. The
     /// stored value stays ISO-8601, which is what the CSV and every validation
     /// rule read; only what a person looks at changes.
     ///

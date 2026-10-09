@@ -38,10 +38,10 @@ struct DocumentPreview: View {
         } message: {
             // The size and the privacy were already here; the accuracy was
             // not, and it is the part that should decide this. Measured on two
-            // real passports across three prompt versions: the document number
+            // trial documents across three prompt versions: the document number
             // came back right every time, the dates were right on the shortest
-            // prompt, and the name was never usable — a page printing MINCHUK
-            // produced MIHCHYK. So the feature no longer offers names, and this
+            // prompt, and the name was never usable — a page printing PRYKLADENKO
+            // produced PRYKLADEHKO. So the feature no longer offers names, and this
             // copy says so rather than warning about a risk it has stopped
             // taking. A caveat that is visibly wrong stops being read.
             Text("""
@@ -51,8 +51,8 @@ struct DocumentPreview: View {
 
             That is all it offers because that is all it read reliably. On five \
             test passports it got every document number right and three dates \
-            out of ten wrong — an expiry of 22 July 2027 came back as 27 July \
-            2022, which would make a valid passport look expired. A wrong date \
+            out of ten wrong — an expiry of 14 March 2028 came back as 28 March \
+            2014, which would make a valid passport look expired. A wrong date \
             in the right format is not something this app can catch, so it no \
             longer suggests dates at all.
 

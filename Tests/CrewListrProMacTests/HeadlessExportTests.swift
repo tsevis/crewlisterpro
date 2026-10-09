@@ -96,7 +96,7 @@ final class HeadlessExportTests: XCTestCase {
         document[.fullName] = "ERIK LINDQVIST"
         document[.documentNumber] = "X1234567A"
         document[.nationality] = "UKRAINIAN"
-        document[.birthDate] = "1980-11-20"
+        document[.birthDate] = "1981-08-26"
         document[.sex] = "M"
         for field in CrewField.requiredForExport { document.verifiedFields.insert(field.rawValue) }
         let data = AppData(boats: [boat], trips: [trip], documents: [document],

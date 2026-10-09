@@ -129,7 +129,7 @@ final class DateFormatTests: XCTestCase {
     }
 
     func testDisplayAndStoredRoundTrip() {
-        for iso in ["1900-01-01", "1984-12-16", "2027-07-22", "2099-12-31"] {
+        for iso in ["1900-01-01", "1987-05-12", "2028-03-14", "2099-12-31"] {
             XCTAssertEqual(DocumentDate.stored(DocumentDate.display(iso)), iso)
         }
     }

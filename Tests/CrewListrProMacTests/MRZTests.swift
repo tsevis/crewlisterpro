@@ -67,13 +67,13 @@ final class MRZTests: XCTestCase {
     // MARK: - Two-digit year resolution
 
     func testAnExpiryInTheThirtiesResolvesForward() {
-        XCTAssertEqual(MRZ.date("350703", kind: .expiry, today: today), "2035-07-03")
-        XCTAssertEqual(MRZ.date("310930", kind: .expiry, today: today), "2031-09-30")
+        XCTAssertEqual(MRZ.date("350219", kind: .expiry, today: today), "2035-02-19")
+        XCTAssertEqual(MRZ.date("311208", kind: .expiry, today: today), "2031-12-08")
     }
 
     func testAnExpiryInsideTheCurrentDecadeIsUnchanged() {
-        XCTAssertEqual(MRZ.date("290528", kind: .expiry, today: today), "2029-05-28")
-        XCTAssertEqual(MRZ.date("270722", kind: .expiry, today: today), "2027-07-22")
+        XCTAssertEqual(MRZ.date("291117", kind: .expiry, today: today), "2029-11-17")
+        XCTAssertEqual(MRZ.date("280314", kind: .expiry, today: today), "2028-03-14")
     }
 
     func testARecentlyExpiredDocumentStaysInThePast() {
@@ -97,8 +97,8 @@ final class MRZTests: XCTestCase {
     }
 
     func testABirthDateIsNeverResolvedIntoTheFuture() {
-        XCTAssertEqual(MRZ.date("841216", kind: .birth, today: today), "1984-12-16")
-        XCTAssertEqual(MRZ.date("130309", kind: .birth, today: today), "2013-03-09")
+        XCTAssertEqual(MRZ.date("870512", kind: .birth, today: today), "1987-05-12")
+        XCTAssertEqual(MRZ.date("140602", kind: .birth, today: today), "2014-06-02")
         // 2028 has not happened yet, so "28" must mean 1928.
         XCTAssertEqual(MRZ.date("280101", kind: .birth, today: today), "1928-01-01")
     }
@@ -130,8 +130,8 @@ final class MRZTests: XCTestCase {
 
     // MARK: - Line 2 is trusted on its own
 
-    /// Three of the six real MIO passports produced a perfect line 2 next to a
-    /// line 1 the camera destroyed. All three used to yield nothing.
+    /// A perfect line 2 next to a line 1 the camera destroyed used to yield
+    /// nothing.
     func testExtractsLine2FieldsWhenLine1IsGarbled() {
         for observed in MRZFixtures.observed {
             let text = [observed.line1, observed.line2].compactMap { $0 }.joined(separator: "\n")
@@ -146,7 +146,7 @@ final class MRZTests: XCTestCase {
     func testMissingLine1StillYieldsEverythingLine2Knows() {
         let result = MRZ.parse(MRZFixtures.minor.line2)
         XCTAssertEqual(result?["document_number"], "Z2468013C")
-        XCTAssertEqual(result?["birth_date"], "2013-03-09")
+        XCTAssertEqual(result?["birth_date"], "2014-06-02")
         XCTAssertEqual(result?["sex"], "F")
         XCTAssertNil(result?["full_name"], "there is no name to invent")
     }
@@ -178,7 +178,7 @@ final class MRZTests: XCTestCase {
     }
 
     func testANameLineContainingDigitsIsRejected() {
-        // The real OCR of one MIO passport: security print read as characters.
+        // OCR output in which security print was read as characters.
         XCTAssertNil(MRZ.names("PEUTONAKAMURA<<YUK1AAAAAAA1<1X11111111155"))
     }
 
@@ -240,7 +240,7 @@ final class MRZTests: XCTestCase {
     }
 
     func testFallbackReturnsNothingWhenThereIsNoNumber() {
-        XCTAssertTrue(MRZ.fallback("ПАСПОРТ PASSPORT УКРАЇНА").isEmpty)
+        XCTAssertTrue(MRZ.fallback("ПАСПОРТ PASSPORT УТОПІЯ").isEmpty)
     }
 
     func testFallbackDoesNotClaimADocumentType() {

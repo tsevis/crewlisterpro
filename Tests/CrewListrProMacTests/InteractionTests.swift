@@ -170,7 +170,7 @@ final class InteractionTests: XCTestCase {
         store.setVerified(true, field: .birthDate, on: document.id)
         XCTAssertTrue(try XCTUnwrap(store.data.documents.first { $0.id == document.id }).isVerified(.birthDate))
 
-        harness.type("16 dec 1984", intoFieldAt: birthDateField)
+        harness.type("12 may 1987", intoFieldAt: birthDateField)
 
         XCTAssertFalse(try XCTUnwrap(store.data.documents.first { $0.id == document.id }).isVerified(.birthDate))
     }

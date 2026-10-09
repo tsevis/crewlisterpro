@@ -292,7 +292,7 @@ private struct FieldRow: View {
                 // checking it is reading the same unreadable line the model
                 // guessed from.
                 //
-                // The example used to be MINCHUK read as MIHCHYK. The rescue
+                // The example used to be PRYKLADENKO read as PRYKLADEHKO. The rescue
                 // offers neither names nor dates now (see `CrewField.rescuable`),
                 // so this warning sits on a document number alone — a long
                 // alphanumeric string where one transposed character is exactly

@@ -48,7 +48,7 @@ enum OCRService {
         // Every field except the name comes from line 2, which carries check
         // digits; the name is the only thing line 1 has, and line 1 has no
         // arithmetic behind it at all. So the failure this addresses is
-        // specific and was measured on real documents: of six passports in a
+        // specific and was measured on trial documents: of six passports in a
         // working store, three had a perfect line 2 and no name — one had lost
         // the `P<XXX` prefix off the front of line 1, one had thirteen digits
         // smeared through it, and one had no line 1 recognised at all.

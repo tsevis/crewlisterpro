@@ -32,7 +32,7 @@ final class ExportServiceTests: XCTestCase {
     }
 
     private func row(_ name: String, number: String = "W1357924D", nationality: String = "UKRAINIAN",
-                     birth: String = "1984-12-16", sex: String = "F", expiry: String = "2027-07-22",
+                     birth: String = "1987-05-12", sex: String = "F", expiry: String = "2028-03-14",
                      role: CrewRole = .passenger) -> CrewListRow {
         var document = CrewDocument(tripID: UUID(), personID: UUID(), originalName: "\(number).jpeg", encryptedFileName: "\(number).bin")
         document[.fullName] = name
@@ -82,13 +82,13 @@ final class ExportServiceTests: XCTestCase {
     }
 
     func testCSVCarriesTheBirthDate() throws {
-        let text = try exportCSV([row("YUKI NAKAMURA", birth: "1984-12-16")])
-        XCTAssertTrue(text.contains("1984-12-16"), "birth date missing:\n\(text)")
+        let text = try exportCSV([row("YUKI NAKAMURA", birth: "1987-05-12")])
+        XCTAssertTrue(text.contains("1987-05-12"), "birth date missing:\n\(text)")
     }
 
     func testCSVCarriesTheExpiryDate() throws {
-        let text = try exportCSV([row("SOFIA MARCHETTI", expiry: "2035-07-03")])
-        XCTAssertTrue(text.contains("2035-07-03"), "expiry missing:\n\(text)")
+        let text = try exportCSV([row("SOFIA MARCHETTI", expiry: "2035-02-19")])
+        XCTAssertTrue(text.contains("2035-02-19"), "expiry missing:\n\(text)")
     }
 
     func testCSVCarriesTheRole() throws {

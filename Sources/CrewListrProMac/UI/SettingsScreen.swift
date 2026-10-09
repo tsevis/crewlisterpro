@@ -264,7 +264,7 @@ struct SettingsScreen: View {
 
             FormRule()
 
-            FormCaption("Optional, and only used on a document whose machine-readable zone cannot be read. It offers the document number and nothing else — measured against real passports, its dates were wrong three times in ten and its names were invented, so those are the operator's to type. A value it suggests is marked as having no check digits behind it.")
+            FormCaption("Optional, and only used on a document whose machine-readable zone cannot be read. It offers the document number and nothing else — measured in trials, its dates were wrong three times in ten and its names were invented, so those are the operator's to type. A value it suggests is marked as having no check digits behind it.")
         }
     }
 

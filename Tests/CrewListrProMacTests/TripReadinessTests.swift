@@ -35,7 +35,7 @@ final class TripReadinessTests: XCTestCase {
         document[.fullName] = "YUKI NAKAMURA"
         document[.documentNumber] = "W1357924D"
         document[.nationality] = "UTOPIAN"
-        document[.birthDate] = "1984-12-16"
+        document[.birthDate] = "1987-05-12"
         document[.sex] = "F"
         if cleared {
             for field in CrewField.requiredForExport { document.verifiedFields.insert(field.rawValue) }

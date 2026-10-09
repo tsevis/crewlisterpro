@@ -5,10 +5,9 @@ import XCTest
 /// What the local vision model is allowed to contribute, and why the list is
 /// this short.
 ///
-/// Measured against five real Ukrainian passports and then checked against the
-/// app's own MRZ-derived export of the same documents: the document number was
-/// correct 5 times out of 5, the birth date 4 out of 5, the expiry date 3 out
-/// of 5. No prompt version ever produced a usable Latin name — and every
+/// Measured in trials against the app's own MRZ-derived values for the same
+/// documents: the document number was correct 5 times out of 5, the birth date
+/// 4 out of 5, the expiry date 3 out of 5. No prompt version ever produced a usable Latin name — and every
 /// attempt to make it do so changed how the model read the dates.
 ///
 /// The rescue is now the document number and nothing else. The dates went on
@@ -35,14 +34,14 @@ final class RescuePolicyTests: XCTestCase {
         XCTAssertFalse(CrewField.rescuable.contains(.expiryDate))
     }
 
-    /// The name never came back usable. It arrived in Cyrillic — "МІНЧУК" — or
-    /// transliterated into something the page does not print: MINCHUK read as
-    /// MIHCHYK, pure ASCII, passing every check this app makes.
+    /// The name never came back usable. It arrived in Cyrillic — "ПРИКЛАДЕНКО" — or
+    /// transliterated into something the page does not print: PRYKLADENKO read
+    /// as PRYKLADEHKO, pure ASCII, passing every check this app makes.
     func testTheNameIsNotRescuable() {
         XCTAssertFalse(CrewField.rescuable.contains(.fullName))
     }
 
-    /// Nationality and sex are printed bilingually — "УКРАЇНА/UKRAINE", "Ж/F" —
+    /// Nationality and sex are printed bilingually — "УТОПІЯ/UTOPIA", "Ж/F" —
     /// and were never the reason to load a 5 GB model. They are two keystrokes
     /// each, and every field asked for is another field the model can perturb.
     func testNationalityAndSexAreNotRescuable() {
@@ -93,26 +92,26 @@ final class RescuePolicyTests: XCTestCase {
     /// was asked for it, so the policy is enforced on the way back too.
     func testAVolunteeredNameOrDateNeverReachesTheDocument() {
         let reply = [
-            "full_name": "MIHCHYK OLEKSANDR",
-            "nationality": "UKRAINE",
+            "full_name": "PRYKLADEHKO MYATA",
+            "nationality": "UTOPIA",
             "sex": "M",
-            "document_number": "FH010367",
-            "birth_date": "1980-11-20",
-            "expiry_date": "2022-07-27",
+            "document_number": "QX123456",
+            "birth_date": "1981-08-26",
+            "expiry_date": "2014-03-28",
         ]
         let usable = LlamaVisionRescuer.usableFields(from: reply)
 
-        XCTAssertEqual(usable, ["document_number": "FH010367"])
-        XCTAssertNil(usable["full_name"], "MIHCHYK is what a real passport printing MINCHUK produced")
-        XCTAssertNil(usable["expiry_date"], "2022-07-27 is what a passport reading 2027-07-22 produced")
+        XCTAssertEqual(usable, ["document_number": "QX123456"])
+        XCTAssertNil(usable["full_name"], "PRYKLADEHKO is what a page printing PRYKLADENKO produced")
+        XCTAssertNil(usable["expiry_date"], "2014-03-28 is what a page reading 2028-03-14 produced")
     }
 
     /// The one kept field still has to survive the shaping: a document number is
     /// mostly digits, and excluding them everywhere once dropped a number the
     /// model had read correctly.
     func testTheKeptFieldIsStillScriptChecked() {
-        let usable = LlamaVisionRescuer.usableFields(from: ["document_number": "GB262590"])
-        XCTAssertEqual(usable["document_number"], "GB262590")
+        let usable = LlamaVisionRescuer.usableFields(from: ["document_number": "QX654321"])
+        XCTAssertEqual(usable["document_number"], "QX654321")
     }
 
     func testACyrillicDocumentNumberIsStillDropped() {
@@ -125,14 +124,15 @@ final class RescuePolicyTests: XCTestCase {
     /// The readings that cost the dates their place, recorded so nobody has to
     /// rediscover them — or argue the dates back in without new measurements.
     ///
-    /// Read from five real passports and compared against the app's export of
-    /// the same documents. Two of the three are the day transposed with the
-    /// last two digits of the year, which is the shape to watch for.
+    /// Shapes of misreadings seen in trials against the app's own export of the
+    /// same documents, reproduced here with invented dates. Two of the three
+    /// are the day transposed with the last two digits of the year, which is the
+    /// shape to watch for.
     func testTheMeasuredWrongDatesAreStillWellFormedDates() {
         let measured = [
-            (wrong: "2022-07-27", truth: "2027-07-22", field: CrewField.expiryDate),
-            (wrong: "2028-05-29", truth: "2029-05-28", field: CrewField.expiryDate),
-            (wrong: "2013-09-13", truth: "2013-03-09", field: CrewField.birthDate),
+            (wrong: "2014-03-28", truth: "2028-03-14", field: CrewField.expiryDate),
+            (wrong: "2028-08-31", truth: "2031-08-28", field: CrewField.expiryDate),
+            (wrong: "2014-02-06", truth: "2014-06-02", field: CrewField.birthDate),
         ]
         for (wrong, truth, field) in measured {
             XCTAssertNotEqual(wrong, truth)
@@ -143,17 +143,17 @@ final class RescuePolicyTests: XCTestCase {
         }
     }
 
-    /// One of the three is catchable, and only by accident: reading 2027 as
-    /// 2022 puts the expiry in the past, and the app already warns about that.
+    /// One of the three is catchable, and only by accident: reading 2028 as
+    /// 2014 puts the expiry in the past, and the app already warns about that.
     /// It does not block, and it would say nothing at all had the transposition
     /// gone the other way — an expired document read as valid.
     func testOnlyTheExpiryPushedIntoThePastRaisesAnything() {
-        let past = CrewFieldValidator.validate(.expiryDate, value: "2022-07-27",
+        let past = CrewFieldValidator.validate(.expiryDate, value: "2014-03-28",
                                                today: CrewFieldValidator.isoDate("2026-08-21")!)
         XCTAssertEqual(past.message, "Document has expired.")
         XCTAssertFalse(past.isBlocking, "a warning, not a block — the operator still has to look")
 
-        let future = CrewFieldValidator.validate(.expiryDate, value: "2028-05-29",
+        let future = CrewFieldValidator.validate(.expiryDate, value: "2028-08-31",
                                                  today: CrewFieldValidator.isoDate("2026-08-21")!)
         XCTAssertNil(future.message, "a year out on a future expiry is silent, and that is the common case")
     }
@@ -166,7 +166,7 @@ final class RescuePolicyTests: XCTestCase {
     /// were already ignored downstream. Now they are dropped where the policy
     /// lives, so "ignored" does not depend on the store remembering to ignore.
     func testKeysOutsideTheVocabularyAreDropped() {
-        let usable = LlamaVisionRescuer.usableFields(from: ["place_of_birth": "KYIV", "document_type": "passport"])
+        let usable = LlamaVisionRescuer.usableFields(from: ["place_of_birth": "ERIKSTAD", "document_type": "passport"])
         XCTAssertTrue(usable.isEmpty)
     }
 
@@ -180,7 +180,7 @@ final class RescuePolicyTests: XCTestCase {
     func testThePromptAndTheFilterAgreeWhateverThePolicySays() {
         for field in CrewField.rescuable {
             XCTAssertTrue(LlamaVisionRescuer.prompt.contains(field.rawValue))
-            let sample = field == .documentNumber ? "GB262590" : "1984-12-16"
+            let sample = field == .documentNumber ? "QX654321" : "1987-05-12"
             XCTAssertNotNil(LlamaVisionRescuer.usableFields(from: [field.rawValue: sample])[field.rawValue],
                             "\(field.rawValue) is declared rescuable but the filter drops it")
         }
