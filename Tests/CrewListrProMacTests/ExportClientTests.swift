@@ -37,7 +37,7 @@ final class ExportClientTests: XCTestCase {
         var document = CrewDocument(tripID: UUID(), personID: UUID(), originalName: "\(number).jpeg", encryptedFileName: "\(number).bin")
         document[.fullName] = name
         document[.documentNumber] = number
-        document[.nationality] = "UKRAINIAN"
+        document[.nationality] = "UTOPIAN"
         document[.birthDate] = birth
         document[.sex] = "F"
         document[.expiryDate] = "2028-03-14"

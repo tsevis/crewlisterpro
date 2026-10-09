@@ -50,7 +50,7 @@ final class NationalityRepairTests: XCTestCase {
 
     func testACleanCodeIsLeftExactlyAsItIs() {
         XCTAssertEqual(MRZ.repairedStateCode("HUN", issuingState: "HUN"), "HUN")
-        XCTAssertEqual(MRZ.repairedStateCode("UKR", issuingState: nil), "UKR")
+        XCTAssertEqual(MRZ.repairedStateCode("GRC", issuingState: nil), "GRC")
     }
 
     // MARK: - Through the parser
@@ -78,7 +78,7 @@ final class NationalityRepairTests: XCTestCase {
 
     func testARealNationalityStillPasses() {
         XCTAssertEqual(CrewFieldValidator.validate(.nationality, value: "HUN"), .valid)
-        XCTAssertEqual(CrewFieldValidator.validate(.nationality, value: "UKRAINIAN"), .valid)
+        XCTAssertEqual(CrewFieldValidator.validate(.nationality, value: "GREEK"), .valid)
         XCTAssertEqual(CrewFieldValidator.validate(.nationality, value: "CÔTE D'IVOIRE"), .valid)
     }
 }

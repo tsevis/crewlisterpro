@@ -12,7 +12,7 @@ final class ModelTests: XCTestCase {
         var document = CrewDocument(tripID: UUID(), personID: UUID(), originalName: "a.jpeg", encryptedFileName: "a.bin")
         document[.fullName] = "YUKI NAKAMURA"
         document[.documentNumber] = "W1357924D"
-        document[.nationality] = "UKRAINIAN"
+        document[.nationality] = "UTOPIAN"
         document[.birthDate] = "1987-05-12"
         document[.sex] = "F"
         document[.expiryDate] = "2028-03-14"

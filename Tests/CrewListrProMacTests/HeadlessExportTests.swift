@@ -95,7 +95,7 @@ final class HeadlessExportTests: XCTestCase {
         var document = CrewDocument(tripID: trip.id, personID: UUID(), originalName: "a.jpeg", encryptedFileName: "a.bin")
         document[.fullName] = "ERIK LINDQVIST"
         document[.documentNumber] = "X1234567A"
-        document[.nationality] = "UKRAINIAN"
+        document[.nationality] = "UTOPIAN"
         document[.birthDate] = "1981-08-26"
         document[.sex] = "M"
         for field in CrewField.requiredForExport { document.verifiedFields.insert(field.rawValue) }
