@@ -41,12 +41,12 @@ enum Screen: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .fleet: "Fleet"
-        case .crewLibrary: "Crew Library"
-        case .trip: "Trip"
-        case .people: "People"
-        case .crewList: "Crew List"
-        case .settings: "Settings"
+        case .fleet: String(localized: "Fleet")
+        case .crewLibrary: String(localized: "Crew Library")
+        case .trip: String(localized: "Trip")
+        case .people: String(localized: "People")
+        case .crewList: String(localized: "Crew List")
+        case .settings: String(localized: "Settings")
         }
     }
 
@@ -209,16 +209,33 @@ struct GridDivider: View {
 
 /// `.subpanel-header` — an eyebrow, what the panel is showing, and whatever
 /// small control belongs to the panel itself rather than to the window.
+///
+/// The eyebrow is always a label and is looked up. The title is looked up when
+/// it is a literal and shown as it is when it is a `String`, because it is
+/// usually the name of the thing selected — a yacht, a person, a file.
 struct PanelHeader<Accessory: View>: View {
-    let eyebrow: String
-    let title: String
-    @ViewBuilder var accessory: Accessory
+    private let eyebrow: LocalizedStringKey
+    private let title: Text
+    private let accessory: Accessory
+
+    init(eyebrow: LocalizedStringKey, title: LocalizedStringKey, @ViewBuilder accessory: () -> Accessory) {
+        self.eyebrow = eyebrow
+        self.title = Text(title)
+        self.accessory = accessory()
+    }
+
+    @_disfavoredOverload
+    init(eyebrow: LocalizedStringKey, title: String, @ViewBuilder accessory: () -> Accessory) {
+        self.eyebrow = eyebrow
+        self.title = Text(verbatim: title)
+        self.accessory = accessory()
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 Eyebrow(text: eyebrow)
-                Text(title)
+                title
                     .font(Theme.Font.sectionTitle)
                     .foregroundStyle(Theme.ink)
                     .lineLimit(1)
@@ -237,7 +254,12 @@ struct PanelHeader<Accessory: View>: View {
 }
 
 extension PanelHeader where Accessory == EmptyView {
-    init(eyebrow: String, title: String) {
+    init(eyebrow: LocalizedStringKey, title: LocalizedStringKey) {
+        self.init(eyebrow: eyebrow, title: title) { EmptyView() }
+    }
+
+    @_disfavoredOverload
+    init(eyebrow: LocalizedStringKey, title: String) {
         self.init(eyebrow: eyebrow, title: title) { EmptyView() }
     }
 }
@@ -256,7 +278,7 @@ struct ReadinessBanner: View {
                 .font(.system(size: 12))
                 .foregroundStyle(blockers.isEmpty ? Theme.success : Theme.caution)
 
-            Text(blockers.isEmpty ? "Crew list is ready to export." : blockers[0])
+            (blockers.isEmpty ? Text("Crew list is ready to export.") : Text(verbatim: blockers[0]))
                 .font(Theme.Font.meta)
                 .foregroundStyle(blockers.isEmpty ? Theme.verifiedInk : Theme.warningInk)
                 .lineLimit(1)

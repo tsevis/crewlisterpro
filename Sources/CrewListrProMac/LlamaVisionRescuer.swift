@@ -18,30 +18,30 @@ enum RescueError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .modelNotInstalled:
-            "The local AI model is not installed on this Mac."
+            String(localized: "The local AI model is not installed on this Mac.")
         case .runtimeMissing:
-            "The local AI runtime is missing from this build of \(AppVersion.name)."
+            String(localized: "The local AI runtime is missing from this build of \(AppVersion.name).")
         case .serverRefused(let status):
-            "The local AI is not answering yet (HTTP \(status))."
+            String(localized: "The local AI is not answering yet (HTTP \(String(status))).")
         case .runtimeDidNotStart:
-            "The local AI model did not finish loading."
+            String(localized: "The local AI model did not finish loading.")
         case .unreadableReply:
-            "The local AI returned something that was not a set of document fields."
+            String(localized: "The local AI returned something that was not a set of document fields.")
         }
     }
 
     var recoverySuggestion: String? {
         switch self {
         case .modelNotInstalled:
-            "Download \(ModelManifest.qwen3VL8BQ4.displayName) (\(ModelManifest.qwen3VL8BQ4.approximateSizeDescription)). It is a one-time download and stays on this Mac. Everything else works without it."
+            String(localized: "Download \(ModelManifest.qwen3VL8BQ4.displayName) (\(ModelManifest.qwen3VL8BQ4.approximateSizeDescription)). It is a one-time download and stays on this Mac. Everything else works without it.")
         case .runtimeMissing:
-            "This build was packaged without llama-server. Rebuild with scripts/release.sh on a machine that has it."
+            String(localized: "This build was packaged without llama-server. Rebuild with scripts/release.sh on a machine that has it.")
         case .serverRefused(let status):
-            "The local AI is not answering yet (HTTP \(status))."
+            String(localized: "The local AI is not answering yet (HTTP \(String(status))).")
         case .runtimeDidNotStart:
-            "It can take a minute on first use. Try again, and check there is free memory."
+            String(localized: "It can take a minute on first use. Try again, and check there is free memory.")
         case .unreadableReply:
-            "Type the fields from the image instead — the machine-readable zone on this document could not be read either."
+            String(localized: "Type the fields from the image instead — the machine-readable zone on this document could not be read either.")
         }
     }
 }

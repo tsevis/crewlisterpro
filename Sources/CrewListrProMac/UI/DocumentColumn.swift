@@ -87,7 +87,7 @@ struct DocumentColumn: View {
     }
 
     private var title: String {
-        store.selectedBoat?.displayName ?? "No trip selected"
+        store.selectedBoat?.displayName ?? String(localized: "No trip selected")
     }
 
     private var cleared: Int {
@@ -143,7 +143,7 @@ private struct DocumentRow: View {
         }
     }
 
-    private func marker(_ text: String) -> some View {
+    private func marker(_ text: LocalizedStringKey) -> some View {
         Text(text)
             .font(Theme.Font.eyebrow)
             .tracking(0.4)
@@ -174,7 +174,7 @@ private struct DocumentRow: View {
                     if isClient { marker("CLIENT") }
                 }
 
-                Text(document[.documentNumber].isEmpty ? "No number" : document[.documentNumber])
+                (document[.documentNumber].isEmpty ? Text("No number") : Text(verbatim: document[.documentNumber]))
                     .font(Theme.Font.monoMeta)
                     .foregroundStyle(Theme.inkTertiary)
                     .lineLimit(1)

@@ -86,17 +86,21 @@ struct FleetScreen: View {
         guard let boat = pendingDeletion else { return "" }
         let trips = store.tripCount(forBoatID: boat.id)
         guard trips > 0 else {
-            return "\(boat.displayName) is removed from the fleet. No trip uses it, so no crew list changes."
+            return String(localized: "\(boat.displayName) is removed from the fleet. No trip uses it, so no crew list changes.")
         }
         let documents = store.documentCount(forBoatID: boat.id)
-        let scans = documents == 0
-            ? "no documents"
-            : "\(documents) encrypted document\(documents == 1 ? "" : "s")"
-        return """
-        \(boat.displayName) is removed from the fleet, and so are the \(trips) trip\(trips == 1 ? "" : "s") made for it and their \(scans). The passport scans are erased from this Mac and cannot be recovered.
+        guard documents > 0 else {
+            return String(localized: """
+            \(boat.displayName) is removed from the fleet, and so are the \(trips) trips made for it and their no documents. The passport scans are erased from this Mac and cannot be recovered.
+
+            To take a yacht out of the fleet while keeping its past charters, retire it instead.
+            """)
+        }
+        return String(localized: """
+        \(boat.displayName) is removed from the fleet, and so are the \(trips) trips made for it and their \(documents) encrypted documents. The passport scans are erased from this Mac and cannot be recovered.
 
         To take a yacht out of the fleet while keeping its past charters, retire it instead.
-        """
+        """)
     }
 
     private func add() {
@@ -138,8 +142,8 @@ struct FleetScreen: View {
 
     private var title: String {
         let count = store.fleet.count
-        guard count > 0 else { return "No yachts yet" }
-        return count == 1 ? "1 yacht" : "\(count) yachts"
+        guard count > 0 else { return String(localized: "No yachts yet") }
+        return String(localized: "\(count) yachts")
     }
 
     private func row(_ boat: Boat) -> some View {
@@ -211,7 +215,7 @@ private struct FleetRow: View {
                         boat.registrationNumber.isEmpty ? nil : boat.registrationNumber]
             .compactMap { $0 }
             .joined(separator: " · ")
-        let charters = trips == 0 ? "No trips" : "\(trips) trip\(trips == 1 ? "" : "s")"
+        let charters = trips == 0 ? String(localized: "No trips") : String(localized: "\(trips) trips")
         return registry.isEmpty ? charters : "\(registry) · \(charters)"
     }
 }

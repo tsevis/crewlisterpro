@@ -84,25 +84,26 @@ struct CrewLibraryDetail: View {
     }
 
     private var confirmed: String {
-        guard let confirmedAt = saved.confirmedAt else { return "Kept before every field was confirmed" }
-        return "Confirmed \(VoyageDate.printed(confirmedAt))"
+        guard let confirmedAt = saved.confirmedAt else { return String(localized: "Kept before every field was confirmed") }
+        return String(localized: "Confirmed \(confirmedAt.formatted(date: .abbreviated, time: .omitted))")
     }
 
     // MARK: - Onto a trip
 
+    /// Each case is a whole sentence of its own, rather than one sentence with
+    /// "this trip" or a yacht and date spliced into it, so a translation can
+    /// inflect around whichever it names.
+    @ViewBuilder
     private var addToTrip: some View {
-        PhilonNote(
-            kind: store.selectedTripID == nil ? .warning : .verified,
-            message: store.selectedTripID == nil
-                ? "Pick a trip in the strip above to put \(saved.displayName) on it."
-                : "Adding \(saved.displayName) to \(tripDescription) puts these values and this scan on that trip. Every field still has to be confirmed there — the saving is the upload, not the checking."
-        )
-    }
-
-    private var tripDescription: String {
-        guard let trip = store.selectedTrip else { return "this trip" }
-        let boat = store.boat(for: trip)?.displayName ?? "Untitled yacht"
-        return "\(boat) on \(VoyageDate.printed(trip.departureDate))"
+        if store.selectedTripID == nil {
+            PhilonNote(kind: .warning, message: "Pick a trip in the strip above to put \(saved.displayName) on it.")
+        } else if let trip = store.selectedTrip {
+            let boat = store.boat(for: trip)?.displayName ?? String(localized: "Untitled yacht")
+            let departure = trip.departureDate.formatted(date: .abbreviated, time: .omitted)
+            PhilonNote(kind: .verified, message: "Adding \(saved.displayName) to \(boat) on \(departure) puts these values and this scan on that trip. Every field still has to be confirmed there — the saving is the upload, not the checking.")
+        } else {
+            PhilonNote(kind: .verified, message: "Adding \(saved.displayName) to this trip puts these values and this scan on that trip. Every field still has to be confirmed there — the saving is the upload, not the checking.")
+        }
     }
 
     // MARK: - The scan

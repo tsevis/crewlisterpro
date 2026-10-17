@@ -24,10 +24,26 @@ struct PendingDocument: Identifiable, Hashable {
 
         var label: String {
             switch self {
-            case .shareSheet: "shared to this app"
-            case .photos: "from Photos"
-            case .files: "from Files"
-            case .camera: "scanned"
+            case .shareSheet: String(localized: "shared to this app")
+            case .photos: String(localized: "from Photos")
+            case .files: String(localized: "from Files")
+            case .camera: String(localized: "scanned")
+            }
+        }
+
+        /// The banner's sentence for documents that all came this way. Whole
+        /// sentences, one per route, so a translation never has to agree with
+        /// a fragment it cannot see.
+        func summary(count: Int) -> String {
+            switch (self, count == 1) {
+            case (.shareSheet, true): String(localized: "One document shared to this app")
+            case (.shareSheet, false): String(localized: "\(count) documents shared to this app")
+            case (.photos, true): String(localized: "One document from Photos")
+            case (.photos, false): String(localized: "\(count) documents from Photos")
+            case (.files, true): String(localized: "One document from Files")
+            case (.files, false): String(localized: "\(count) documents from Files")
+            case (.camera, true): String(localized: "One document scanned")
+            case (.camera, false): String(localized: "\(count) documents scanned")
             }
         }
     }
@@ -63,12 +79,14 @@ final class DocumentIntake {
     /// What the banner says. Written out rather than templated from a count
     /// alone, because "1 documents" is how an app tells you nobody read it.
     var pendingSummary: String {
-        guard !pending.isEmpty else { return "" }
-        let origins = Set(pending.map(\.origin.label))
-        let where_ = origins.count == 1 ? origins.first! : "waiting"
-        return pending.count == 1
-            ? "One document \(where_)"
-            : "\(pending.count) documents \(where_)"
+        guard let first = pending.first else { return "" }
+        let origins = Set(pending.map(\.origin))
+        guard origins.count == 1 else {
+            return pending.count == 1
+                ? String(localized: "One document waiting")
+                : String(localized: "\(pending.count) documents waiting")
+        }
+        return first.origin.summary(count: pending.count)
     }
 
     // MARK: - The share sheet
@@ -95,7 +113,7 @@ final class DocumentIntake {
                 pending.append(PendingDocument(url: destination, name: name, origin: .shareSheet))
                 taken += 1
             } catch {
-                problem = "\(name) was shared to CrewListr Pro but could not be read: \(error.localizedDescription)"
+                problem = String(localized: "\(name) was shared to CrewListr Pro but could not be read: \(error.localizedDescription)")
                 SharedInbox.discard(staged, fileManager: fileManager)
             }
         }
@@ -116,7 +134,7 @@ final class DocumentIntake {
             pending.append(document)
             return document
         } catch {
-            problem = "\(name) could not be read: \(error.localizedDescription)"
+            problem = String(localized: "\(name) could not be read: \(error.localizedDescription)")
             return nil
         }
     }
@@ -139,7 +157,7 @@ final class DocumentIntake {
             }
             return stage(data, named: source.lastPathComponent, origin: .files)
         } catch {
-            problem = "\(source.lastPathComponent) could not be read: \(CrewStore.explain(error))"
+            problem = String(localized: "\(source.lastPathComponent) could not be read: \(CrewStore.explain(error))")
             return nil
         }
     }

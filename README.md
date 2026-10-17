@@ -2,7 +2,7 @@
 
 <img src="docs/icon-masked.png" alt="CrewListr Pro" width="128">
 
-**Offline crew-list preparation for charter yachts.** Version 0.5.0 · macOS 15+ (Apple Silicon) · iOS 17+
+**Offline crew-list preparation for charter yachts.** Version 0.6.0 · macOS 15+ (Apple Silicon) · iOS 17+
 
 CrewListr Pro turns photographed or scanned identity documents into the crew list a port
 authority expects. Extraction runs entirely on the device using Vision OCR and ICAO 9303
@@ -12,6 +12,12 @@ WhatsApp, Viber or any other share sheet — see [**CrewListr Pro for iOS**](doc
 lives in a SQLCipher database and original files are sealed with AES-GCM under a
 Keychain-held key. **Nothing can be exported until an operator has confirmed every field
 against the document image.**
+
+**New in 0.6.0** · The interface speaks **Greek and Ukrainian** as well as English ·
+a trip with no skipper **exports with a reminder** instead of being blocked · a trip's
+passports, scans and people are **deleted a week after its crew list is first exported** ·
+the boarding port is no longer lost when you leave the Trip screen mid-edit. See
+[RELEASE_NOTES.md](RELEASE_NOTES.md).
 
 **Topics** · `crew-list` `yacht-charter` `maritime` `port-clearance` `passport` `mrz`
 `icao-9303` `ocr` `vision` `macos` `ios` `swiftui` `apple-silicon` `offline-first` `on-device-ai`
@@ -73,12 +79,17 @@ place they are held.
 
 ![Settings](docs/screenshots/04-settings.png)
 
-Defaults for this Mac, grouped by the moment each one applies: when a trip is
-made (charter start day and length), when a yacht is added (flag and
-port of registry, since most fleets share both), what an export writes (CSV, PDF
-or both; the file-name prefix; a standing folder or ask-each-time; reveal
-afterwards), the optional local model, and how many earlier versions of the
-database are kept.
+Defaults for this Mac, grouped by the moment each one applies: the interface
+language (the system's, English, Ελληνικά or Українська — applied at the next
+launch), when a trip is made (charter start day and length), when a yacht is
+added (flag and port of registry, since most fleets share both), what an export
+writes (CSV, PDF, XLSX; the reminder when a trip names no skipper; the file-name
+prefix; a standing folder or ask-each-time; reveal afterwards), the optional
+local model, and how many earlier versions of the database are kept.
+
+The language changes the interface only. The crew list, the PDF and the passenger
+manifest keep the port authority's own English and Greek wording in every
+language.
 
 Two sections are about what is deliberately **not** configurable. Nothing there
 can skip the review — there is no preference to auto-confirm a field, to trust a
@@ -110,6 +121,10 @@ check it against its own image.**
   trip, skipper or passenger — and, for the skipper alone, an email address. At the end of
   that work sits **Keep in Crew Library**, which is the offer never to do it again for this
   person.
+
+A skipper is no longer required: the Hellenic Coast Guard has dropped it from the crew list.
+Exporting a trip that names none asks once — *Export Anyway* or *Cancel* — and the reminder
+has a **Don't show again** box; it can be turned back on in Settings → Export.
 
 The strip above the Import button always names the next thing standing between this trip and
 a crew list ("Name the yacht.", "GIULIA ROSSI: Nationality, Date of birth, Sex still
@@ -427,6 +442,14 @@ because a document restored without that key would be unreadable. See
 [`docs/ios.md`](docs/ios.md).
 
 Deleting a document or a trip erases the encrypted original and every revision from disk.
+
+**A trip deletes itself a week after its crew list is first exported.** Seven days after
+that first export the trip, its passports, its scans and its people are erased exactly as
+*Delete Trip* would, and so is every earlier version of the database that still holds
+them — otherwise a restore would bring them back. Exporting again does not move the date;
+the Trip screen shows it. The yacht and the Crew Library are kept, and a trip that was never
+exported is never deleted this way. The check runs when the app opens and whenever it comes
+back to the front. Exported files are yours and are not touched.
 
 Nothing is sent anywhere. The only network traffic the app can generate is the optional model
 download, and inference talks to `127.0.0.1` only.

@@ -61,6 +61,7 @@ struct CrewListrProApp: App {
             // costs nothing: the second pass finds an empty inbox.
             guard phase == .active else { return }
             intake.drainSharedInbox()
+            store.purgeExpiredTripsAndReport()
         }
     }
 }

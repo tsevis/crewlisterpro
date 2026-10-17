@@ -22,7 +22,7 @@ struct FleetDetail: View {
             PanelHeader(eyebrow: boat.isRetired ? "Retired yacht" : "Yacht",
                         title: boat.displayName) {
                 if trips > 0 {
-                    Text(trips == 1 ? "1 trip" : "\(trips) trips")
+                    Text("\(trips) trips")
                         .font(Theme.Font.meta.monospacedDigit())
                         .foregroundStyle(Theme.inkTertiary)
                 }
@@ -33,19 +33,20 @@ struct FleetDetail: View {
                     if boat.isRetired { retiredNote }
 
                     FormSection(title: "In this app") {
-                        field("Your name for it", placeholder: boat.isComplete ? boat.name : "The blue one", \.nickname)
+                        field("Your name for it", id: "your-name-for-it",
+                              placeholder: boat.isComplete ? boat.name : String(localized: "The blue one"), \.nickname)
                         FormRule()
                         FormCaption("What the fleet list, the trip strip and the document panel call this yacht. Nothing here is printed — a port authority reads the registered name below. Leave it empty to be shown that name everywhere.")
                     }
 
                     FormSection(title: "Printed on every crew list") {
-                        field("Name", placeholder: "S/Y ELPIDA", \.name)
+                        field("Name", id: "name", placeholder: "S/Y ELPIDA", \.name)
                         FormRule()
-                        field("Flag", placeholder: "GRC", \.flag, uppercased: true)
+                        field("Flag", id: "flag", placeholder: "GRC", \.flag, uppercased: true)
                         FormRule()
-                        field("Port of registry", placeholder: "PIRAEUS", \.registrationPort, uppercased: true)
+                        field("Port of registry", id: "port-of-registry", placeholder: "PIRAEUS", \.registrationPort, uppercased: true)
                         FormRule()
-                        field("Registration no.", placeholder: "GR-1187-P", \.registrationNumber, uppercased: true)
+                        field("Registration no.", id: "registration-no.", placeholder: "GR-1187-P", \.registrationNumber, uppercased: true)
                     }
 
                     preview
@@ -69,14 +70,15 @@ struct FleetDetail: View {
     /// A key path rather than a binding into `boat`, which is a `let` copy of
     /// a store record — writing to it would change nothing and look like it had.
     private func field(
-        _ label: String,
+        _ label: LocalizedStringKey,
+        id: String,
         placeholder: String,
         _ keyPath: WritableKeyPath<Boat, String>,
         uppercased: Bool = false
     ) -> some View {
         FormRow(label: label) {
             CommitField(
-                identifier: "fleet.field.\(label.lowercased().replacingOccurrences(of: " ", with: "-"))",
+                identifier: "fleet.field.\(id)",
                 placeholder: placeholder,
                 value: boat[keyPath: keyPath],
                 normalise: uppercased ? { $0.uppercased() } : { $0 }
@@ -104,17 +106,27 @@ struct FleetDetail: View {
                 .strokeBorder(Theme.hairlineStrong, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.inner, style: .continuous))
 
-            if !missing.isEmpty {
-                PhilonNote(kind: .warning, message: "\(missing.joined(separator: " and ")) would print blank. Export is blocked until the yacht has a name and a flag.")
+            if let blankWarning {
+                PhilonNote(kind: .warning, message: blankWarning)
             }
         }
     }
 
-    private var missing: [String] {
-        var blanks: [String] = []
-        if !boat.isComplete { blanks.append("The name") }
-        if boat.flag.trimmingCharacters(in: .whitespaces).isEmpty { blanks.append("the flag") }
-        return blanks
+    /// One whole sentence per case rather than "the name" and "the flag"
+    /// joined with "and", which no translation could inflect.
+    private var blankWarning: String? {
+        let nameMissing = !boat.isComplete
+        let flagMissing = boat.flag.trimmingCharacters(in: .whitespaces).isEmpty
+        switch (nameMissing, flagMissing) {
+        case (true, true):
+            return String(localized: "The name and the flag would print blank. Export is blocked until the yacht has a name and a flag.")
+        case (true, false):
+            return String(localized: "The name would print blank. Export is blocked until the yacht has a name and a flag.")
+        case (false, true):
+            return String(localized: "The flag would print blank. Export is blocked until the yacht has a name and a flag.")
+        case (false, false):
+            return nil
+        }
     }
 
     private func previewBox(_ caption: String, _ value: String, isLast: Bool = false) -> some View {
@@ -145,7 +157,7 @@ struct FleetDetail: View {
     private var retiredNote: some View {
         PhilonNote(
             kind: .warning,
-            message: "This yacht is retired. It is not offered for new trips, and the \(trips) charter\(trips == 1 ? "" : "s") already made for it are unchanged."
+            message: "This yacht is retired. It is not offered for new trips, and the \(trips) charters already made for it are unchanged."
         )
     }
 
@@ -180,7 +192,7 @@ struct FleetDetail: View {
                     .buttonStyle(.philonQuiet(role: .destructive))
                     .accessibilityIdentifier("fleet.delete")
                     .help(trips > 0
-                          ? "Erases this yacht, its \(trips) trip\(trips == 1 ? "" : "s") and their documents. Retire it instead to keep those crew lists."
+                          ? "Erases this yacht, its \(trips) trips and their documents. Retire it instead to keep those crew lists."
                           : "No trip uses this yacht")
             }
         }

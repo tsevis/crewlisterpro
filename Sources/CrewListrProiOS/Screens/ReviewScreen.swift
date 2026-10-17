@@ -30,17 +30,17 @@ struct ReviewScreen: View {
             }
         }
         .background(Theme.ground)
-        .navigationTitle(document?[.fullName].isEmpty == false ? document![.fullName] : (document?.originalName ?? "Document"))
+        .navigationTitle(document?[.fullName].isEmpty == false ? document![.fullName] : (document?.originalName ?? String(localized: "Document")))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { store.selectedDocumentID = documentID }
         .task(id: document?.imageRevisions.count) { await loadImage() }
         .fullScreenCover(isPresented: $showingFullScreen) {
-            DocumentImageFullScreen(state: scan, title: document?.originalName ?? "Document")
+            DocumentImageFullScreen(state: scan, title: document?.originalName ?? String(localized: "Document"))
         }
         .alert("Reject this document?", isPresented: $rejecting) {
             TextField("Why", text: $rejectionReason)
             Button("Reject", role: .destructive) {
-                store.rejectDocument(documentID, reason: rejectionReason.isEmpty ? "Rejected by the operator." : rejectionReason)
+                store.rejectDocument(documentID, reason: rejectionReason.isEmpty ? String(localized: "Rejected by the operator.") : rejectionReason)
                 rejectionReason = ""
             }
             Button("Cancel", role: .cancel) { rejectionReason = "" }
@@ -158,13 +158,13 @@ struct ReviewScreen: View {
                     TextField("", text: Binding(
                         get: { email },
                         set: { store.setEmail($0, forPersonID: document.personID) }
-                    ), prompt: Text("skipper@example.com").foregroundStyle(Theme.inkTertiary))
+                    ), prompt: Text(verbatim: "skipper@example.com").foregroundStyle(Theme.inkTertiary))
                     .foregroundStyle(Theme.ink)
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    Text(validation.message ?? "Printed on the crew list. The only contact detail this app collects.")
+                    Text(validation.message ?? String(localized: "Printed on the crew list. The only contact detail this app collects."))
                         .font(Theme.Font.meta)
                         .foregroundStyle(validation.message == nil ? Theme.inkTertiary : Theme.caution)
                 }

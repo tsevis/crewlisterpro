@@ -19,6 +19,9 @@ struct SettingsScreen: View {
     @Environment(CrewStore.self) private var store
 
     @State private var confirmingReset = false
+    /// Read once: the choice is stored at once but applies from the next launch.
+    @State private var language = AppLanguage.current()
+    private let launchLanguage = AppLanguage.current()
 
     private var settings: AppSettings { store.settings }
 
@@ -29,6 +32,7 @@ struct SettingsScreen: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        languageSection
                         newTrips
                         newYachts
                         export
@@ -70,6 +74,40 @@ struct SettingsScreen: View {
         store.updateSettings(updated)
     }
 
+    // MARK: - Language
+
+    private var languageSection: some View {
+        FormSection(title: "Language") {
+            FormRow(label: "Interface") {
+                Picker("Interface", selection: $language) {
+                    ForEach(AppLanguage.allCases) { Text(verbatim: $0.nativeName).tag($0) }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 220)
+                .onChange(of: language) { _, chosen in chosen.apply() }
+
+                if language != launchLanguage {
+                    Button("Relaunch Now") { relaunch() }
+                        .buttonStyle(.philonQuiet)
+                }
+            }
+            FormRule()
+            FormCaption("Applies the next time CrewListr Pro opens. The crew list, the PDF and the passenger manifest keep the port authority's English and Greek wording in every language.")
+        }
+    }
+
+    /// Opens a fresh copy of the app, then quits this one. Only from a packaged
+    /// app: under `swift run` there is no bundle to reopen.
+    private func relaunch() {
+        let bundle = Bundle.main.bundleURL
+        guard bundle.pathExtension == "app" else { return }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: bundle, configuration: configuration) { _, _ in
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
+    }
+
     // MARK: - New trips
 
     private var newTrips: some View {
@@ -92,7 +130,7 @@ struct SettingsScreen: View {
                     get: { settings.charterLengthDays },
                     set: { days in edit { $0.charterLengthDays = days } }
                 ), in: 1...AppSettings.longestCharterDays) {
-                    Text(settings.charterLengthDays == 1 ? "1 day" : "\(settings.charterLengthDays) days")
+                    Text("\(settings.charterLengthDays) days")
                         .font(Theme.Font.body.monospacedDigit())
                         .foregroundStyle(Theme.ink)
                         // A Stepper centres its label in whatever width it is
@@ -105,13 +143,14 @@ struct SettingsScreen: View {
 
             FormRule()
 
-            FormCaption("A new trip opens on the next \(AppSettings.weekdayName(settings.charterStartWeekday)) — \(nextDeparture) — and returns \(settings.charterLengthDays) day\(settings.charterLengthDays == 1 ? "" : "s") later. Charters in this trade run Saturday to Saturday, which is what an untouched install does.")
+            FormCaption("A new trip opens on the next \(AppSettings.weekdayName(settings.charterStartWeekday)) — \(nextDeparture) — and returns \(settings.charterLengthDays) days later. Charters in this trade run Saturday to Saturday, which is what an untouched install does.")
         }
     }
 
     private var nextDeparture: String {
-        VoyageDate.printed(VoyageDate.charterWeek(startingOn: settings.charterStartWeekday,
-                                                  lastingDays: settings.charterLengthDays).departure)
+        VoyageDate.charterWeek(startingOn: settings.charterStartWeekday,
+                               lastingDays: settings.charterLengthDays).departure
+            .formatted(date: .abbreviated, time: .omitted)
     }
 
     // MARK: - New yachts
@@ -167,6 +206,17 @@ struct SettingsScreen: View {
 
             FormRule()
 
+            FormRow(label: "Skipper") {
+                Toggle("Remind me when a trip names no skipper", isOn: Binding(
+                    get: { settings.warnsWhenNoSkipper },
+                    set: { on in edit { $0.warnsWhenNoSkipper = on } }
+                ))
+                .toggleStyle(.checkbox)
+                .font(Theme.Font.support)
+            }
+
+            FormRule()
+
             FormRow(label: "File name") {
                 CommitField(placeholder: AppSettings.defaultFileNamePrefix, value: settings.fileNamePrefix) { value in
                     edit { $0.fileNamePrefix = value }
@@ -188,7 +238,7 @@ struct SettingsScreen: View {
                     .foregroundStyle(settings.exportFolderPath.isEmpty ? Theme.inkTertiary : Theme.ink)
                     .lineLimit(1)
                     .truncationMode(.head)
-                    .help(settings.exportFolderPath.isEmpty ? "Every export asks" : settings.exportFolderPath)
+                    .help(settings.exportFolderPath.isEmpty ? String(localized: "Every export asks") : settings.exportFolderPath)
 
                 Button("Choose…") { chooseExportFolder() }
                     .buttonStyle(.philonQuiet)
@@ -227,8 +277,8 @@ struct SettingsScreen: View {
     }
 
     private var folderLabel: String {
-        guard !settings.exportFolderPath.isEmpty else { return "Ask each time" }
-        guard store.standingExportFolder != nil else { return "\(settings.exportFolderPath) — not reachable, exports will ask" }
+        guard !settings.exportFolderPath.isEmpty else { return String(localized: "Ask each time") }
+        guard store.standingExportFolder != nil else { return String(localized: "\(settings.exportFolderPath) — not reachable, exports will ask") }
         return settings.exportFolderPath
     }
 
@@ -237,8 +287,8 @@ struct SettingsScreen: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
-        panel.prompt = "Use This Folder"
-        panel.message = "Choose where exported crew lists are written."
+        panel.prompt = String(localized: "Use This Folder")
+        panel.message = String(localized: "Choose where exported crew lists are written.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         edit { $0.exportFolderPath = url.path(percentEncoded: false) }
     }
@@ -311,10 +361,10 @@ struct SettingsScreen: View {
     private var versionsHeld: String {
         let held = store.backups.count
         guard held > settings.versionsKept else {
-            return held == 1 ? "1 kept now" : "\(held) kept now"
+            return String(localized: "\(held) kept now")
         }
         let losing = held - settings.versionsKept
-        return "\(held) kept now — the oldest \(losing) will be discarded at the next save"
+        return String(localized: "\(held) kept now — the oldest \(losing) will be discarded at the next save")
     }
 
     private func revealDataFolder() {

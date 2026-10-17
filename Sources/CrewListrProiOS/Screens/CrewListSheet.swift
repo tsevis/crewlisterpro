@@ -15,6 +15,7 @@ struct CrewListSheet: View {
 
     @State private var exported: [URL] = []
     @State private var sharing = false
+    @State private var askingAboutSkipper = false
 
     private var trip: Trip? { store.data.trips.first { $0.id == tripID } }
     private var boat: Boat? { trip.flatMap(store.boat(for:)) }
@@ -69,7 +70,7 @@ struct CrewListSheet: View {
                 if blockers.isEmpty {
                     Section {
                         Button {
-                            export()
+                            exportUnlessSkipperMissing()
                         } label: {
                             Label("Export and Share", systemImage: "square.and.arrow.up")
                         }
@@ -96,6 +97,18 @@ struct CrewListSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
             }
+            // A reminder, not a gate: the Hellenic Coast Guard no longer
+            // requires a skipper on the crew list.
+            .alert("No skipper is named on this trip.", isPresented: $askingAboutSkipper) {
+                Button("Export Anyway") { export() }
+                Button("Don't Show Again") {
+                    store.stopWarningWhenNoSkipper()
+                    export()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The crew list will be exported with the skipper section blank.")
+            }
             .sheet(isPresented: $sharing) {
                 ShareSheet(items: exported) {
                     // The written files are an unencrypted crew list with five
@@ -112,7 +125,7 @@ struct CrewListSheet: View {
     }
 
     @ViewBuilder
-    private func headerValue(_ label: String, _ value: String, blank: Bool = false) -> some View {
+    private func headerValue(_ label: LocalizedStringKey, _ value: String, blank: Bool = false) -> some View {
         HStack {
             Text(label).foregroundStyle(Theme.inkSecondary)
             Spacer()
@@ -125,6 +138,15 @@ struct CrewListSheet: View {
             }
         }
         .font(Theme.Font.support)
+    }
+
+    private func exportUnlessSkipperMissing() {
+        store.selectedTripID = tripID
+        if store.selectedTripNeedsSkipperWarning {
+            askingAboutSkipper = true
+        } else {
+            export()
+        }
     }
 
     private func export() {

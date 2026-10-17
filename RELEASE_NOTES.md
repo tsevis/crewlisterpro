@@ -1,3 +1,32 @@
+# CrewListr Pro 0.6.0
+
+**Greek and Ukrainian.** The whole interface — Mac, iPhone and iPad, the share
+extension and the camera and photo permission prompts — is now in Ελληνικά and
+Українська as well as English. It follows the system language; Settings →
+Language overrides it for this app alone, from the next launch. The crew list,
+the PDF and the passenger manifest are unchanged in every language: they keep
+the port authority's own English and Greek wording.
+
+**No skipper is no longer a blocker.** The Hellenic Coast Guard no longer asks
+for a skipper on the crew list, so a trip without one exports. The app asks once
+before it does, and the question has a *Don't show again* box; Settings →
+Export turns the reminder back on.
+
+**Personal data is deleted a week after the crew list goes out.** Seven days
+after a trip's crew list is first exported, the trip, its passports, its scans
+and its people are deleted, and so is every earlier database version that still
+holds them. Exporting again does not move the date, which the Trip screen shows.
+Yachts and the Crew Library are kept; a trip never exported is never deleted
+this way. Trips exported before 0.6.0 carry no export date and are not deleted
+automatically — delete them by hand when they are done with.
+
+**The boarding port reaches the manifest.** Typing the boarding port and going
+straight to the crew list used to drop it: the field saved only when it lost
+focus, and leaving the screen is not losing focus. Every field now saves when
+its screen goes away, on the Mac and on iOS.
+
+---
+
 # CrewListr Pro 0.5.0
 
 **The passenger manifest, in the port authority's own template.** Every export

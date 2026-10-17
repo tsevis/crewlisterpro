@@ -1,0 +1,52 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSCameraUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "el": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Το CrewListr Pro χρησιμοποιεί την κάμερα για να σαρώσει μια σελίδα διαβατηρίου. Η σάρωση μένει σε αυτό το iPhone, κρυπτογραφημένη, και δεν αποστέλλεται ποτέ."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro uses the camera to scan a passport page. The scan stays on this iPhone, encrypted, and is never uploaded."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro використовує камеру, щоб сканувати сторінку паспорта. Скан залишається на цьому iPhone у зашифрованому вигляді й ніколи не вивантажується."
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "el": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Το CrewListr Pro διαβάζει τις φωτογραφίες διαβατηρίων που επιλέγετε για να συμπληρώσει μια κατάσταση πληρώματος. Τίποτα δεν αποστέλλεται και καμία άλλη φωτογραφία δεν εξετάζεται."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro reads the passport photographs you choose so it can fill in a crew list. Nothing is uploaded and no other photograph is looked at."
+          }
+        },
+        "uk": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro читає вибрані вами фото паспортів, щоб заповнити список екіпажу. Нічого не вивантажується, і жодні інші фото не переглядаються."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

@@ -25,22 +25,22 @@ enum About {
     /// deleting erases — so the builds say the same true thing about whatever
     /// the operator is actually holding.
     #if os(macOS)
-    static let deviceName = "this Mac"
+    static let deviceName = String(localized: "this Mac")
     #elseif canImport(UIKit)
     static var deviceName: String {
-        UIDevice.current.userInterfaceIdiom == .pad ? "this iPad" : "this iPhone"
+        UIDevice.current.userInterfaceIdiom == .pad ? String(localized: "this iPad") : String(localized: "this iPhone")
     }
     #else
-    static let deviceName = "this device"
+    static let deviceName = String(localized: "this device")
     #endif
 
-    static var subtitle: String { "Crew lists prepared without the documents ever leaving \(deviceName)" }
-    static var version: String { "Version \(AppVersion.short) (\(AppVersion.build))" }
+    static var subtitle: String { String(localized: "Crew lists prepared without the documents ever leaving \(deviceName)") }
+    static var version: String { String(localized: "Version \(AppVersion.short) (\(AppVersion.build))") }
 
     /// Two paragraphs: what a crew list is, and what this program refuses to do
     /// about it. Neither invents a namesake — the instrument is old enough to
     /// speak for itself.
-    static var story: String { """
+    static var story: String { String(localized: """
     A crew list is one of the oldest instruments in a harbour. Before a yacht clears \
     port, someone writes down who is aboard — the name, the nationality, the number \
     on the passport, the date of birth — and signs for it. The authority does not \
@@ -53,12 +53,12 @@ enum About {
     letters on the screen are the letters on the document. Every field carries its \
     own confirmation, editing a value retracts it, and nothing can be exported until \
     an operator has looked at each one beside the image it came from.
-    """ }
+    """) }
 
     /// Two credits, because they are two different claims: who built it, and
     /// who it was built for. Each carries its own mark in the footer.
-    static let credit = "Developed by Tsevis Studio"
-    static let partnerCredit = "Union Yachting for the Greek charter community"
+    static let credit = String(localized: "Developed by Tsevis Studio")
+    static let partnerCredit = String(localized: "Union Yachting for the Greek charter community")
 
     /// The two destinations behind the footer's marks.
     static let links: [(label: String, address: URL)] = [
@@ -78,50 +78,54 @@ enum About {
     /// Protection, the whole container encrypted under the passcode — is
     /// stronger than what it replaces, and is named here rather than glossed.
     #if os(macOS)
-    private static let storage = """
+    private static let storage = String(localized: """
     Storage is SQLCipher (BSD-3-Clause) over SQLite (public domain), built on OpenSSL \
     (Apache-2.0). Document payloads are sealed with AES-GCM through Apple's CryptoKit \
     under a key held beside the database. Recognition is Apple Vision and the \
     interface is SwiftUI — both macOS system frameworks.
-    """
+    """)
 
-    private static let localModel = """
+    private static let localModel = String(localized: """
     The optional local vision model is Qwen3-VL 8B Instruct (Apache-2.0), run through \
     llama.cpp (MIT). No model weights ship with this application: the download is \
     about 5.8 GB, happens only on explicit consent, is checked against a recorded \
     SHA-256 before it is kept, and inference talks to 127.0.0.1 and nowhere else. \
     A document whose machine-readable zone parsed cleanly never reaches the model \
     at all, and anything the model proposes arrives unconfirmed like every other read.
-    """
+    """)
     #else
-    private static let storage = """
+    private static let storage = String(localized: """
     Storage is SQLite (public domain) inside the app's own container, which iOS \
     encrypts under a key the passcode releases. Document payloads are sealed on top \
     of that with AES-GCM through Apple's CryptoKit, under a key held in the Keychain \
     as WhenUnlockedThisDeviceOnly. Recognition is Apple Vision, page scanning is \
     VisionKit and the interface is SwiftUI — all iOS system frameworks.
-    """
+    """)
 
-    private static let localModel = """
+    private static let localModel = String(localized: """
     There is no local vision model on iPhone. The Mac build offers an optional \
     5.8 GB Qwen3-VL model for documents whose machine-readable zone cannot be read; \
     a phone has neither the room for it nor a way to run it, so a document that \
     cannot be read is held back asking for the field to be typed. Nothing is \
     guessed in its place.
-    """
+    """)
     #endif
 
-    static var legal: String { """
-    \(storage)
-
-    \(localModel)
-
+    private static var licenceAndPrivacy: String { String(localized: """
     CrewListr Pro is MIT licensed. Developed by Tsevis Studio for Union Yachting \
     and the whole charter and sailing community of Greece.
 
     Your documents are yours. CrewListr Pro never transmits a document, a fragment, \
     an extracted field or a filename anywhere. Deleting a document or a trip erases \
     the encrypted original and every revision from \(deviceName).
+    """) }
+
+    static var legal: String { """
+    \(storage)
+
+    \(localModel)
+
+    \(licenceAndPrivacy)
     """ }
 
     /// Paragraphs, for a view that lays each one out separately.

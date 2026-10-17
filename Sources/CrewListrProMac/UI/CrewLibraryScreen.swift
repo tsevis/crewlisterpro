@@ -73,11 +73,11 @@ struct CrewLibraryScreen: View {
     /// is the sentence that says what forgetting one does.
     private var removalMessage: String {
         guard let saved = pendingRemoval else { return "" }
-        return """
+        return String(localized: """
         \(saved.displayName) leaves the library and the library's copy of their scan is erased from this Mac.
 
         Trips they are already on keep their own copies and are not touched.
-        """
+        """)
     }
 
     // MARK: - The library
@@ -112,8 +112,8 @@ struct CrewLibraryScreen: View {
 
     private var title: String {
         let count = store.crewLibrary.count
-        guard count > 0 else { return "Nobody kept yet" }
-        return count == 1 ? "1 person" : "\(count) people"
+        guard count > 0 else { return String(localized: "Nobody kept yet") }
+        return String(localized: "\(count) people")
     }
 }
 
@@ -138,7 +138,7 @@ private struct CrewLibraryRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
 
-                Text(saved.documentNumber.isEmpty ? "No number" : saved.documentNumber)
+                (saved.documentNumber.isEmpty ? Text("No number") : Text(verbatim: saved.documentNumber))
                     .font(Theme.Font.monoMeta)
                     .foregroundStyle(Theme.inkTertiary)
                     .lineLimit(1)
@@ -159,8 +159,11 @@ private struct CrewLibraryRow: View {
     /// What this person usually is, and when they were last aboard — the two
     /// things that tell four regulars apart from a long tail of one-offs.
     private var subtitle: String {
-        let role = saved.role == .skipper ? "Skipper" : "Passenger"
-        guard let used = saved.lastUsedAt else { return "\(role) · not used yet" }
-        return "\(role) · last used \(VoyageDate.printed(used))"
+        let isSkipper = saved.role == .skipper
+        guard let used = saved.lastUsedAt else {
+            return isSkipper ? String(localized: "Skipper · not used yet") : String(localized: "Passenger · not used yet")
+        }
+        let date = used.formatted(date: .abbreviated, time: .omitted)
+        return isSkipper ? String(localized: "Skipper · last used \(date)") : String(localized: "Passenger · last used \(date)")
     }
 }

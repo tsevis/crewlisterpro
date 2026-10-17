@@ -38,7 +38,7 @@ struct RootView: View {
         .task { if AboutPresentation.wanted() { showAbout = true } }
         // Everything the store could not do, said once and cleared. The Mac
         // shows the same sentence in the same words.
-        .alert("CrewListr Pro", isPresented: Binding(
+        .alert(Text(verbatim: "CrewListr Pro"), isPresented: Binding(
             get: { store.errorMessage != nil },
             set: { if !$0 { store.errorMessage = nil } }
         )) {
@@ -46,7 +46,7 @@ struct RootView: View {
         } message: {
             Text(store.errorMessage ?? "")
         }
-        .alert("CrewListr Pro", isPresented: Binding(
+        .alert(Text(verbatim: "CrewListr Pro"), isPresented: Binding(
             get: { intake.problem != nil },
             set: { if !$0 { intake.problem = nil } }
         )) {

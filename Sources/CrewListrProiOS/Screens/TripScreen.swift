@@ -25,11 +25,11 @@ struct TripScreen: View {
 
     /// The four printed values, or the first one that is missing.
     private var registrationSummary: String {
-        guard let boat else { return "No yacht" }
-        guard boat.isComplete else { return "Needs a name" }
+        guard let boat else { return String(localized: "No yacht") }
+        guard boat.isComplete else { return String(localized: "Needs a name") }
         let printed = [boat.flag, boat.registrationPort, boat.registrationNumber]
         return printed.contains(where: { $0.trimmingCharacters(in: .whitespaces).isEmpty })
-            ? "Some boxes would print blank"
+            ? String(localized: "Some boxes would print blank")
             : printed.joined(separator: "  ·  ")
     }
 
@@ -55,7 +55,7 @@ struct TripScreen: View {
         // operator pushed *is* that, so it says so on the way in.
         .onAppear { store.selectedTripID = tripID }
         .background(Theme.ground)
-        .navigationTitle(boat?.displayName ?? "Charter")
+        .navigationTitle(boat?.displayName ?? String(localized: "Charter"))
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -105,7 +105,7 @@ struct TripScreen: View {
                 Text("Name, flag, port of registry and registration number are facts about the vessel. They are held on the yacht and printed on every crew list made for it.")
             }
 
-            Section("The week") {
+            Section {
                 DatePicker("Departure", selection: Binding(
                     get: { trip.departureDate },
                     set: { store.setDepartureDate($0, onTripWith: trip.id) }
@@ -125,6 +125,12 @@ struct TripScreen: View {
                                     uppercased: true, alignment: .trailing) { value in
                         store.setEmbarkationPort(value, onTripWith: trip.id)
                     }
+                }
+            } header: {
+                Text("The week")
+            } footer: {
+                if let deletion = TripRetention.deletionDate(for: trip) {
+                    Text("This trip's passports and scans are deleted on \(deletion.formatted(date: .long, time: .omitted)), \(TripRetention.days) days after the crew list was first exported.")
                 }
             }
 
@@ -149,7 +155,7 @@ struct TripScreen: View {
                 }
                 Button("Delete Charter and Documents", role: .destructive) { confirmingDelete = true }
             } footer: {
-                Text("Archiving keeps the charter and its sealed scans. Deleting erases \(documents.count) encrypted document\(documents.count == 1 ? "" : "s") from \(About.deviceName), and cannot be undone.")
+                Text("Archiving keeps the charter and its sealed scans. Deleting erases \(documents.count) encrypted documents from \(About.deviceName), and cannot be undone.")
             }
         }
         .listStyle(.insetGrouped)
@@ -170,7 +176,7 @@ struct TripScreen: View {
                 for url in urls { intake.stage(securityScoped: url) }
                 Task { await intake.deliver(to: tripID, store: store) }
             case .failure(let error):
-                intake.problem = "Import cancelled: \(error.localizedDescription)"
+                intake.problem = String(localized: "Import cancelled: \(error.localizedDescription)")
             }
         }
         .fullScreenCover(isPresented: $scanning) {
@@ -185,7 +191,7 @@ struct TripScreen: View {
                 scanning = false
             } onFailure: { error in
                 scanning = false
-                intake.problem = "The scanner stopped: \(error.localizedDescription)"
+                intake.problem = String(localized: "The scanner stopped: \(error.localizedDescription)")
             }
             .ignoresSafeArea()
         }
@@ -198,7 +204,7 @@ struct TripScreen: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This permanently erases \(documents.count) encrypted document\(documents.count == 1 ? "" : "s"). It cannot be undone.")
+            Text("This permanently erases \(documents.count) encrypted documents. It cannot be undone.")
         }
     }
 

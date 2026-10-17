@@ -50,6 +50,11 @@ struct AppSettings: Codable, Hashable, Sendable {
     /// Show the written files in the Finder afterwards.
     var revealsAfterExport: Bool = true
 
+    /// Ask before exporting a trip that names no skipper. The Hellenic Coast
+    /// Guard no longer requires one, so this is a reminder, not a gate, and the
+    /// operator can turn it off from the reminder itself.
+    var warnsWhenNoSkipper: Bool = true
+
     // MARK: - Storage
 
     /// How many earlier versions of the database to keep.
@@ -104,9 +109,9 @@ struct AppSettings: Codable, Hashable, Sendable {
     }
 
     private var exportedFiles: [(short: String, long: String)] {
-        [(writesCSV, ("CSV", "the crew list CSV")),
-         (writesPDF, ("PDF", "the crew list PDF")),
-         (writesManifest, ("XLSX", "the passenger manifest XLSX"))]
+        [(writesCSV, ("CSV", String(localized: "the crew list CSV"))),
+         (writesPDF, ("PDF", String(localized: "the crew list PDF"))),
+         (writesManifest, ("XLSX", String(localized: "the passenger manifest XLSX")))]
             .filter(\.0).map(\.1)
     }
 
@@ -114,14 +119,19 @@ struct AppSettings: Codable, Hashable, Sendable {
     private func listed(_ items: [String]) -> String {
         guard let last = items.last else { return "" }
         let rest = items.dropLast()
-        return rest.isEmpty ? last : "\(rest.joined(separator: ", ")) and \(last)"
+        return rest.isEmpty ? last : String(localized: "\(rest.joined(separator: ", ")) and \(last)",
+                                            comment: "Joins the files an export writes: the others, comma-separated, then the last one.")
     }
 
     /// The name of a weekday, for the picker and for saying what a new trip
-    /// will do. English and fixed, matching `DocumentDate`'s months: this is
-    /// the same operator reading both.
+    /// will do. Fixed names rather than the calendar's symbols, so the day
+    /// follows the app's language and not whatever locale the system is set to.
     static func weekdayName(_ weekday: Int) -> String {
-        let names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        let names = [
+            String(localized: "Sunday"), String(localized: "Monday"), String(localized: "Tuesday"),
+            String(localized: "Wednesday"), String(localized: "Thursday"), String(localized: "Friday"),
+            String(localized: "Saturday"),
+        ]
         guard (1...7).contains(weekday) else { return names[6] }
         return names[weekday - 1]
     }
@@ -147,6 +157,7 @@ extension AppSettings {
         decoded.writesManifest = (try? container.decode(Bool.self, forKey: .writesManifest)) ?? true
         decoded.exportFolderPath = (try? container.decode(String.self, forKey: .exportFolderPath)) ?? ""
         decoded.revealsAfterExport = (try? container.decode(Bool.self, forKey: .revealsAfterExport)) ?? true
+        decoded.warnsWhenNoSkipper = (try? container.decode(Bool.self, forKey: .warnsWhenNoSkipper)) ?? true
         decoded.versionsKept = (try? container.decode(Int.self, forKey: .versionsKept)) ?? Self.defaultVersionsKept
         self = decoded.normalised()
     }

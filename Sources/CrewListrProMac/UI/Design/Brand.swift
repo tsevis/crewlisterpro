@@ -98,7 +98,7 @@ struct MakersMark: View {
                     Image(platformImage: mark).resizable().interpolation(.high)
                 } else {
                     // The bundle is missing: keep the affordance, drop the art.
-                    Text("CT")
+                    Text(verbatim: "CT")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(Theme.inkTertiary)
                 }

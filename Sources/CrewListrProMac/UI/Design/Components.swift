@@ -159,11 +159,23 @@ extension ButtonStyle where Self == PhilonIconButtonStyle {
 
 /// `.eyebrow` — the uppercase label above a screen title. Tracking is set on
 /// the view rather than baked into the string so it can be localised.
+///
+/// The case is set on the view too, for the same reason: uppercasing the
+/// argument would uppercase the catalogue *key*, and a translation would never
+/// be found for it. A literal is looked up and then uppercased in the reader's
+/// locale; a `String` is taken as already localised — a name, say — and shown
+/// as it is, uppercased.
 struct Eyebrow: View {
-    let text: String
+    private let text: Text
+
+    init(text: LocalizedStringKey) { self.text = Text(text) }
+
+    @_disfavoredOverload
+    init(text: String) { self.text = Text(verbatim: text.uppercased()) }
 
     var body: some View {
-        Text(text.uppercased())
+        text
+            .textCase(.uppercase)
             .font(Theme.Font.eyebrow)
             .tracking(0.35)
             .foregroundStyle(Theme.inkTertiary)
@@ -218,13 +230,26 @@ struct CountBadge: View {
 /// stays visible rather than living in a menu.
 struct SystemStatusChip: View {
     let symbol: String
-    let text: String
+    private let text: Text
     var tint: Color = Theme.success
+
+    init(symbol: String, text: LocalizedStringKey, tint: Color = Theme.success) {
+        self.symbol = symbol
+        self.text = Text(text)
+        self.tint = tint
+    }
+
+    @_disfavoredOverload
+    init(symbol: String, text: String, tint: Color = Theme.success) {
+        self.symbol = symbol
+        self.text = Text(verbatim: text)
+        self.tint = tint
+    }
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: symbol).foregroundStyle(tint)
-            Text(text).foregroundStyle(Theme.inkSecondary)
+            text.foregroundStyle(Theme.inkSecondary)
         }
         .font(Theme.Font.meta)
         .padding(.horizontal, 9)
@@ -239,12 +264,30 @@ struct SystemStatusChip: View {
 /// say "this was checked" and "this could not be". Both carry a glyph, because
 /// the tint alone is the only difference between them and tint alone is not
 /// something every operator can read.
+///
+/// The title is always a label and is looked up; the message is looked up when
+/// it is a literal and shown as it is when it is a `String`, because most
+/// messages are an extraction note or an export blocker the store has already
+/// worded.
 struct PhilonNote: View {
     enum Kind { case verified, warning }
 
     let kind: Kind
-    var title: String?
-    let message: String
+    private let title: Text?
+    private let message: Text
+
+    init(kind: Kind, title: LocalizedStringKey? = nil, message: LocalizedStringKey) {
+        self.kind = kind
+        self.title = title.map { Text($0) }
+        self.message = Text(message)
+    }
+
+    @_disfavoredOverload
+    init(kind: Kind, title: LocalizedStringKey? = nil, message: String) {
+        self.kind = kind
+        self.title = title.map { Text($0) }
+        self.message = Text(verbatim: message)
+    }
 
     private var symbol: String { kind == .verified ? "checkmark.seal.fill" : "exclamationmark.triangle.fill" }
     private var fill: Color { kind == .verified ? Theme.verifiedFill : Theme.warningFill }
@@ -259,11 +302,12 @@ struct PhilonNote: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 if let title {
-                    Text(title.uppercased())
+                    title
+                        .textCase(.uppercase)
                         .font(Theme.Font.eyebrow)
                         .tracking(0.45)
                 }
-                Text(message)
+                message
                     .font(Theme.Font.meta)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -285,11 +329,32 @@ struct PhilonNote: View {
 
 /// `.secondary-empty` — a dashed well rather than SwiftUI's centred grey
 /// `ContentUnavailableView`, which does not belong to this palette.
+///
+/// Localised like `PhilonNote`: the title is looked up, and the message is
+/// looked up as a literal or shown as it is as a `String` — the reason the
+/// encrypted store would not open, for one.
 struct PhilonEmptyState<Actions: View>: View {
     let symbol: String
-    let title: String
-    let message: String
-    @ViewBuilder var actions: Actions
+    private let title: Text
+    private let message: Text
+    private let actions: Actions
+
+    init(symbol: String, title: LocalizedStringKey, message: LocalizedStringKey,
+         @ViewBuilder actions: () -> Actions) {
+        self.symbol = symbol
+        self.title = Text(title)
+        self.message = Text(message)
+        self.actions = actions()
+    }
+
+    @_disfavoredOverload
+    init(symbol: String, title: LocalizedStringKey, message: String,
+         @ViewBuilder actions: () -> Actions) {
+        self.symbol = symbol
+        self.title = Text(title)
+        self.message = Text(verbatim: message)
+        self.actions = actions()
+    }
 
     var body: some View {
         VStack(spacing: 9) {
@@ -297,11 +362,11 @@ struct PhilonEmptyState<Actions: View>: View {
                 .font(.system(size: 26, weight: .light))
                 .foregroundStyle(Theme.accentText)
 
-            Text(title)
+            title
                 .font(Theme.Font.panelTitle)
                 .foregroundStyle(Theme.ink)
 
-            Text(message)
+            message
                 .font(Theme.Font.support)
                 .foregroundStyle(Theme.inkSecondary)
                 .multilineTextAlignment(.center)
@@ -317,7 +382,12 @@ struct PhilonEmptyState<Actions: View>: View {
 }
 
 extension PhilonEmptyState where Actions == EmptyView {
-    init(symbol: String, title: String, message: String) {
+    init(symbol: String, title: LocalizedStringKey, message: LocalizedStringKey) {
+        self.init(symbol: symbol, title: title, message: message) { EmptyView() }
+    }
+
+    @_disfavoredOverload
+    init(symbol: String, title: LocalizedStringKey, message: String) {
         self.init(symbol: symbol, title: title, message: message) { EmptyView() }
     }
 }
@@ -381,18 +451,32 @@ struct PhilonProgress: View {
 }
 
 /// `.batch-metrics div` — one number and its label, for a readiness summary.
+/// The value is data and shown as it is; the label is looked up.
 struct PhilonMetric: View {
     let value: String
-    let label: String
+    private let label: Text
     var tint: Color = Theme.accentText
+
+    init(value: String, label: LocalizedStringKey, tint: Color = Theme.accentText) {
+        self.value = value
+        self.label = Text(label)
+        self.tint = tint
+    }
+
+    @_disfavoredOverload
+    init(value: String, label: String, tint: Color = Theme.accentText) {
+        self.value = value
+        self.label = Text(verbatim: label)
+        self.tint = tint
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(value)
+            Text(verbatim: value)
                 .font(Theme.Font.metric)
                 .tracking(-0.8)
                 .foregroundStyle(tint)
-            Text(label)
+            label
                 .font(Theme.Font.eyebrow)
                 .tracking(0.3)
                 .foregroundStyle(Theme.inkSecondary)
@@ -458,6 +542,11 @@ struct CommitField: View {
             // overwrite what the operator is in the middle of typing.
             .onChange(of: value) { _, newValue in if !focused { draft = newValue } }
             .onAppear { draft = value }
+            // Taken off screen while still focused — the operator typed the
+            // last box and went straight to another screen — loses focus
+            // without the observer above ever firing. Saved here instead, or
+            // the value is silently dropped. `commit` saves nothing unchanged.
+            .onDisappear { commit() }
             .accessibilityIdentifier(identifier ?? "")
     }
 
@@ -487,14 +576,30 @@ struct CommitField: View {
 
 /// Label on the left, field on the right — the row shape both the trip and the
 /// fleet forms are built from.
+///
+/// A literal label is looked up; a `String` one — a field's own label, already
+/// worded by the model — is shown as it is.
 struct FormRow<Content: View>: View {
-    let label: String
+    private let label: Text
     var labelWidth: CGFloat = 118
-    @ViewBuilder var content: Content
+    private let content: Content
+
+    init(label: LocalizedStringKey, labelWidth: CGFloat = 118, @ViewBuilder content: () -> Content) {
+        self.label = Text(label)
+        self.labelWidth = labelWidth
+        self.content = content()
+    }
+
+    @_disfavoredOverload
+    init(label: String, labelWidth: CGFloat = 118, @ViewBuilder content: () -> Content) {
+        self.label = Text(verbatim: label)
+        self.labelWidth = labelWidth
+        self.content = content()
+    }
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(label)
+            label
                 .font(Theme.Font.support)
                 .foregroundStyle(Theme.inkSecondary)
                 .frame(width: labelWidth, alignment: .trailing)
@@ -511,12 +616,15 @@ struct FormRow<Content: View>: View {
 /// A caption inside a form panel, for the sentence that explains the rows above
 /// it.
 struct FormCaption: View {
-    let text: String
+    private let text: Text
 
-    init(_ text: String) { self.text = text }
+    init(_ text: LocalizedStringKey) { self.text = Text(text) }
+
+    @_disfavoredOverload
+    init(_ text: String) { self.text = Text(verbatim: text) }
 
     var body: some View {
-        Text(text)
+        text
             .font(Theme.Font.meta)
             .foregroundStyle(Theme.inkTertiary)
             .fixedSize(horizontal: false, vertical: true)
@@ -537,12 +645,23 @@ struct FormRule: View {
 
 /// An eyebrow over a bordered stack of form rows.
 struct FormSection<Content: View>: View {
-    let title: String
-    @ViewBuilder var content: Content
+    private let title: Eyebrow
+    private let content: Content
+
+    init(title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.title = Eyebrow(text: title)
+        self.content = content()
+    }
+
+    @_disfavoredOverload
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.title = Eyebrow(text: title)
+        self.content = content()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Eyebrow(text: title)
+            title
             VStack(spacing: 0) { content }.philonInset(radius: Theme.Radius.panel)
         }
     }

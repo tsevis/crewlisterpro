@@ -72,6 +72,10 @@ targets:
         excludes: ["iOS"]
       - path: Resources/iOS/Assets.xcassets
         buildPhase: resources
+      # The permission prompts' translations. Localizable.xcstrings comes in
+      # with Resources above.
+      - path: Resources/iOS/InfoPlist.xcstrings
+        buildPhase: resources
     dependencies:
       - target: CrewListrProShare
         embed: true
@@ -87,6 +91,8 @@ targets:
         CFBundleDisplayName: CrewListr Pro
         CFBundleShortVersionString: "${CREWLISTR_VERSION}"
         CFBundleVersion: "${CREWLISTR_BUILD}"
+        # The interface ships in these; the catalog is Resources/Localizable.xcstrings.
+        CFBundleLocalizations: [en, el, uk]
         UILaunchScreen:
           UIColorName: ""
         UISupportedInterfaceOrientations:
@@ -145,6 +151,9 @@ targets:
       # both sides compile the same file rather than agreeing about a path in
       # two places.
       - path: Sources/CrewListrProiOS/Intake/SharedInbox.swift
+      # An extension looks its strings up in its own bundle, not the app's.
+      - path: Resources/Localizable.xcstrings
+        buildPhase: resources
     entitlements:
       path: Sources/CrewListrProShare/CrewListrProShare.entitlements
       properties:

@@ -155,7 +155,7 @@ struct FieldReviewPane: View {
                 onCommit: { store.setEmail($0, forPersonID: document.personID) }
             )
 
-            Text(validation.message ?? "Printed on the crew list. The only contact detail this app collects.")
+            (validation.message.map { Text(verbatim: $0) } ?? Text("Printed on the crew list. The only contact detail this app collects."))
                 .font(Theme.Font.meta)
                 .foregroundStyle(validation.message == nil ? Theme.inkTertiary : Theme.caution)
                 .fixedSize(horizontal: false, vertical: true)

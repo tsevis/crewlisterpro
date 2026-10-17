@@ -108,6 +108,14 @@ final class Harness<Content: View> {
     /// Types into a field the way a person does — into its field editor — then
     /// leaves it, which is what commits the value.
     func type(_ text: String, intoFieldAt index: Int, file: StaticString = #filePath, line: UInt = #line) {
+        typeWithoutLeaving(text, intoFieldAt: index, file: file, line: line)
+        blur()
+    }
+
+    /// Types into a field and stays in it, the way an operator does who then
+    /// clicks straight to another screen.
+    func typeWithoutLeaving(_ text: String, intoFieldAt index: Int,
+                            file: StaticString = #filePath, line: UInt = #line) {
         let found = fields()
         guard index < found.count else {
             return XCTFail("no editable field at \(index); the view has \(found.count)", file: file, line: line)
@@ -121,7 +129,6 @@ final class Harness<Content: View> {
         editor.selectAll(nil)
         editor.insertText(text, replacementRange: editor.selectedRange())
         settle()
-        blur()
     }
 
     /// Leaves whatever is being edited, exactly as tabbing away does.

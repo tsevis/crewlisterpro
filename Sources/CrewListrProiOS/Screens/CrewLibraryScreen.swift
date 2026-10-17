@@ -60,7 +60,7 @@ struct SavedCrewRow: View {
             }
             Spacer(minLength: 6)
             if let used = saved.lastUsedAt {
-                Text(VoyageDate.short(used))
+                Text(used.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
                     .font(Theme.Font.meta)
                     .foregroundStyle(Theme.inkTertiary)
             }
@@ -94,14 +94,14 @@ struct CrewLibraryDetailScreen: View {
             }
         }
         .background(Theme.ground)
-        .navigationTitle(saved?.displayName ?? "Crew")
+        .navigationTitle(saved?.displayName ?? String(localized: "Crew"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             guard let saved else { return }
             scan = await store.crewLibraryImageData(for: saved).map(ScanState.loaded) ?? .missing
         }
         .fullScreenCover(isPresented: $showingFullScreen) {
-            DocumentImageFullScreen(state: scan, title: saved?.displayName ?? "Scan")
+            DocumentImageFullScreen(state: scan, title: saved?.displayName ?? String(localized: "Scan"))
         }
         .sheet(isPresented: $choosingTrip) { AddToTripSheet(savedID: savedID) }
         .confirmationDialog("Remove from the crew library?", isPresented: $confirmingRemoval, titleVisibility: .visible) {
@@ -125,8 +125,8 @@ struct CrewLibraryDetailScreen: View {
                     .frame(maxHeight: 260)
                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
             } footer: {
-                Text(saved.confirmedAt.map { "Every crew-list field was confirmed against this scan on \(VoyageDate.printed($0))." }
-                     ?? "Kept mid-review: not every field on this person was confirmed.")
+                Text(saved.confirmedAt.map { String(localized: "Every crew-list field was confirmed against this scan on \(VoyageDate.printed($0)).") }
+                     ?? String(localized: "Kept mid-review: not every field on this person was confirmed."))
             }
 
             Section("What the library holds") {

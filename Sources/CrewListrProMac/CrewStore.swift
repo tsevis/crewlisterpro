@@ -133,6 +133,7 @@ final class CrewStore {
             selectedDocumentID = selectedDocumentID
                 ?? documents.first { !$0.canExport() }?.id
                 ?? documents.first?.id
+            purgeExpiredTripsAndReport()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -148,9 +149,9 @@ final class CrewStore {
     func reportDecodingLosses() {
         guard !data.decodingLosses.isEmpty else { return }
         errorMessage = ([
-            "Some stored records could not be read and were left out.",
+            String(localized: "Some stored records could not be read and were left out."),
         ] + data.decodingLosses + [
-            "The rest of your data opened normally. An earlier version may be available under Earlier versions.",
+            String(localized: "The rest of your data opened normally. An earlier version may be available under Earlier versions."),
         ]).joined(separator: "\n")
     }
 
@@ -361,14 +362,14 @@ final class CrewStore {
 
     func importDocuments(_ sources: [URL]) async {
         guard let tripID = selectedTripID else {
-            errorMessage = "Create or select a trip before importing a document."
+            errorMessage = String(localized: "Create or select a trip before importing a document.")
             return
         }
         guard let secureStore else { return }
         defer { activity = nil }
 
         for (index, source) in sources.enumerated() {
-            activity = .step("Reading documents", completed: index, total: sources.count,
+            activity = .step(String(localized: "Reading documents"), completed: index, total: sources.count,
                              detail: source.lastPathComponent)
             do {
                 // Vision is synchronous and slow enough to freeze the window;
@@ -399,7 +400,7 @@ final class CrewStore {
                 data.assignments.append(CrewAssignment(tripID: tripID, personID: person.id, role: data.assignments.contains { $0.tripID == tripID && $0.role == .skipper } ? .passenger : .skipper))
                 selectedDocumentID = document.id
             } catch {
-                errorMessage = "Could not import \(source.lastPathComponent): \(error.localizedDescription)"
+                errorMessage = String(localized: "Could not import \(source.lastPathComponent): \(error.localizedDescription)")
             }
         }
         persist()
@@ -434,7 +435,7 @@ final class CrewStore {
 
     func editSelectedDocument(_ transform: @escaping @Sendable (Data) throws -> Data) {
         guard let id = selectedDocumentID, let document = data.documents.first(where: { $0.id == id }), let secureStore else { return }
-        activity = .indeterminate("Applying image edit")
+        activity = .indeterminate(String(localized: "Applying image edit"))
         Task {
             defer { activity = nil }
             do {
@@ -446,9 +447,9 @@ final class CrewStore {
                 data.documents[index].imageRevisions.append(revision)
                 data.documents[index].verifiedFields = []
                 data.documents[index].risk = .review
-                data.documents[index].riskReasons = ["Image changed; review the extraction again before export."]
+                data.documents[index].riskReasons = [String(localized: "Image changed; review the extraction again before export.")]
                 persist()
-            } catch { errorMessage = "Image edit failed: \(error.localizedDescription)" }
+            } catch { errorMessage = String(localized: "Image edit failed: \(error.localizedDescription)") }
         }
     }
 
@@ -456,7 +457,7 @@ final class CrewStore {
     /// operator has already verified.
     func reanalyseSelectedDocument() {
         guard let id = selectedDocumentID, let document = data.documents.first(where: { $0.id == id }), let secureStore else { return }
-        activity = .indeterminate("Re-reading document", detail: document.originalName)
+        activity = .indeterminate(String(localized: "Re-reading document"), detail: document.originalName)
         Task {
             defer { activity = nil }
             do {
@@ -471,7 +472,7 @@ final class CrewStore {
                 refreshRisk(at: index)
                 syncPerson(from: data.documents[index])
                 persist()
-            } catch { errorMessage = "Re-analysis failed: \(error.localizedDescription)" }
+            } catch { errorMessage = String(localized: "Re-analysis failed: \(error.localizedDescription)") }
         }
     }
 
@@ -504,7 +505,7 @@ final class CrewStore {
     /// snapshotted first, so this is undoable.
     func restoreBackup(_ identifier: String) async {
         guard let secureStore else { return }
-        activity = .indeterminate("Restoring an earlier version")
+        activity = .indeterminate(String(localized: "Restoring an earlier version"))
         defer { activity = nil }
         do {
             data = try await secureStore.restore(identifier)
@@ -525,9 +526,13 @@ final class CrewStore {
 
     /// What a snapshot would restore, phrased for a list row.
     nonisolated static func describe(_ backup: SecureStore.Backup) -> String {
-        let trips = "\(backup.trips) trip\(backup.trips == 1 ? "" : "s")"
-        let documents = "\(backup.documents) document\(backup.documents == 1 ? "" : "s")"
-        return "\(trips), \(documents)"
+        let trips = backup.trips == 1
+            ? String(localized: "\(backup.trips) trip")
+            : String(localized: "\(backup.trips) trips")
+        let documents = backup.documents == 1
+            ? String(localized: "\(backup.documents) document")
+            : String(localized: "\(backup.documents) documents")
+        return String(localized: "\(trips), \(documents)", comment: "A snapshot's contents: trip count, then document count.")
     }
 
     // MARK: - The optional local model
@@ -584,7 +589,7 @@ final class CrewStore {
                 let manager = try ModelManager()
                 try await manager.download(.qwen3VL8BQ4) { received, expected in
                     Task { @MainActor in
-                        self.activity = .bytes("Downloading the local AI model", received: received, expected: expected)
+                        self.activity = .bytes(String(localized: "Downloading the local AI model"), received: received, expected: expected)
                     }
                 }
                 let ready = await manager.isReady(.qwen3VL8BQ4)
@@ -596,7 +601,7 @@ final class CrewStore {
             }
         }
         cancellableWork = work
-        activity = .bytes("Downloading the local AI model", received: 0,
+        activity = .bytes(String(localized: "Downloading the local AI model"), received: 0,
                           expected: ModelManifest.qwen3VL8BQ4.totalBytes)
         await work.value
         cancellableWork = nil
@@ -615,14 +620,14 @@ final class CrewStore {
         await refreshLocalModelState()
         if !removed || localModelIsInstalled {
             errorMessage = localModelIsInstalled
-                ? "This app's copy was removed, but the model is still on this Mac — another program downloaded it into the shared model cache, and erasing that is not this app's to do."
-                : "There was no downloaded copy to remove."
+                ? String(localized: "This app's copy was removed, but the model is still on this Mac — another program downloaded it into the shared model cache, and erasing that is not this app's to do.")
+                : String(localized: "There was no downloaded copy to remove.")
         }
     }
 
     func rescueSelectedDocumentWithLocalAI() {
         guard let id = selectedDocumentID, let document = data.documents.first(where: { $0.id == id }), let secureStore else { return }
-        activity = .indeterminate("Asking the local model", detail: document.originalName)
+        activity = .indeterminate(String(localized: "Asking the local model"), detail: document.originalName)
         let work = Task { [weak self] in
             guard let self else { return }
             defer { activity = nil }
@@ -639,7 +644,7 @@ final class CrewStore {
                     // behind it must not be indistinguishable from one that has.
                     data.documents[index].markSuggested(rawField: key)
                 }
-                data.documents[index].riskReasons.append("Local AI suggestions added; all remain unverified.")
+                data.documents[index].riskReasons.append(String(localized: "Local AI suggestions added; all remain unverified."))
                 refreshRisk(at: index)
                 persist()
             } catch is CancellationError {
@@ -656,15 +661,15 @@ final class CrewStore {
     private func report(_ phase: LlamaVisionRescuer.Phase, document: String) {
         switch phase {
         case .startingRuntime:
-            activity = Activity(title: "Starting the local AI model",
-                                detail: "First use since launch",
+            activity = Activity(title: String(localized: "Starting the local AI model"),
+                                detail: String(localized: "First use since launch"),
                                 fraction: nil, isCancellable: true, style: .sustained)
         case .loadingModel(let elapsed):
-            activity = Activity(title: "Loading the local AI model",
-                                detail: "\(Int(elapsed))s · about 8 GB into memory, several minutes on first use",
+            activity = Activity(title: String(localized: "Loading the local AI model"),
+                                detail: String(localized: "\(Int(elapsed))s · about 8 GB into memory, several minutes on first use"),
                                 fraction: nil, isCancellable: true, style: .sustained)
         case .reading:
-            activity = .indeterminate("Reading the document with the local model", detail: document)
+            activity = .indeterminate(String(localized: "Reading the document with the local model"), detail: document)
         }
     }
 
@@ -683,27 +688,40 @@ final class CrewStore {
     /// for the operator rather than as a boolean.
     var exportBlockers: [String] {
         var blockers: [String] = []
-        guard let trip = selectedTrip else { return ["Select a trip."] }
-        guard let boat = data.boats.first(where: { $0.id == trip.boatID }) else { return ["This trip has no yacht."] }
-        if !boat.isComplete { blockers.append("Name the yacht.") }
-        if boat.flag.trimmingCharacters(in: .whitespaces).isEmpty { blockers.append("Set the yacht's flag.") }
+        guard let trip = selectedTrip else { return [String(localized: "Select a trip.")] }
+        guard let boat = data.boats.first(where: { $0.id == trip.boatID }) else { return [String(localized: "This trip has no yacht.")] }
+        if !boat.isComplete { blockers.append(String(localized: "Name the yacht.")) }
+        if boat.flag.trimmingCharacters(in: .whitespaces).isEmpty { blockers.append(String(localized: "Set the yacht's flag.")) }
         let documents = selectedTripDocuments
-        if documents.isEmpty { blockers.append("Import at least one document.") }
+        if documents.isEmpty { blockers.append(String(localized: "Import at least one document.")) }
         for document in documents {
             let pending = document.blockingFields()
             if document.risk == .high {
-                blockers.append("\(document.originalName) is rejected.")
+                blockers.append(String(localized: "\(document.originalName) is rejected."))
             } else if !pending.isEmpty {
-                blockers.append("\(document.originalName): \(pending.map(\.label).joined(separator: ", ")) still unconfirmed.")
+                blockers.append(String(localized: "\(document.originalName): \(pending.map(\.label).joined(separator: ", ")) still unconfirmed.",
+                                             comment: "A document's file name, then the field labels not yet confirmed."))
             }
-        }
-        if !documents.isEmpty, !data.assignments.contains(where: { $0.tripID == trip.id && $0.role == .skipper }) {
-            blockers.append("Nominate a skipper.")
         }
         return blockers
     }
 
     var selectedTripCanExport: Bool { exportBlockers.isEmpty }
+
+    /// The selected trip has people on it but nobody named as skipper, and the
+    /// operator has not turned the reminder off. Not a blocker: the Hellenic
+    /// Coast Guard no longer requires a skipper on the crew list.
+    var selectedTripNeedsSkipperWarning: Bool {
+        guard settings.warnsWhenNoSkipper, let trip = selectedTrip, !selectedTripDocuments.isEmpty else { return false }
+        return !data.assignments.contains { $0.tripID == trip.id && $0.role == .skipper }
+    }
+
+    /// "Don't show again" on the missing-skipper reminder.
+    func stopWarningWhenNoSkipper() {
+        var changed = settings
+        changed.warnsWhenNoSkipper = false
+        updateSettings(changed)
+    }
 
     func crewRows(forTripID tripID: UUID) -> [CrewListRow] {
         data.documents
@@ -750,6 +768,7 @@ final class CrewStore {
             try PassengerManifest.export(to: url, trip: trip, rows: rows)
             written.append(url)
         }
+        markFirstExport(ofTripWith: trip.id)
         return written
     }
 
@@ -796,6 +815,18 @@ final class CrewStore {
         Task { await secureStore.deleteOriginals(named: names.filter { !$0.isEmpty }) }
     }
 
+    /// Discards every snapshot that still holds one of these trips, once the
+    /// saves already queued — including the one that deleted them, which
+    /// snapshots the state it replaces — have reached disk.
+    func forgetInBackups(tripIDs: Set<UUID>) {
+        guard let secureStore, !tripIDs.isEmpty else { return }
+        let previous = persistChain
+        persistChain = Task {
+            _ = await previous.value
+            await secureStore.discardBackups(containingAnyTripIn: tripIDs)
+        }
+    }
+
     /// Waits for any in-flight save to reach disk. Tests only: the UI never
     /// needs it, because `persistChain` already serialises writes.
     func flushForTesting() async { _ = await persistChain.value }
@@ -827,8 +858,8 @@ enum ExportError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noTripSelected: "Select a trip before exporting."
-        case .blocked(let reasons): "The crew list is not ready:\n• " + reasons.joined(separator: "\n• ")
+        case .noTripSelected: String(localized: "Select a trip before exporting.")
+        case .blocked(let reasons): String(localized: "The crew list is not ready:") + "\n• " + reasons.joined(separator: "\n• ")
         }
     }
 }

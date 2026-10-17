@@ -109,7 +109,7 @@ struct RootView: View {
                 case .success(let urls):
                     Task { await store.importDocuments(urls) }
                 case .failure(let error):
-                    store.errorMessage = "Import cancelled: \(error.localizedDescription)"
+                    store.errorMessage = String(localized: "Import cancelled: \(error.localizedDescription)")
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .requestImport)) { _ in
@@ -130,7 +130,13 @@ struct RootView: View {
                 Button("Cancel", role: .cancel) { pendingTripDeletion = nil }
             } message: {
                 let count = store.data.documents.filter { $0.tripID == pendingTripDeletion?.id }.count
-                Text("This permanently erases \(count) encrypted document\(count == 1 ? "" : "s") from this Mac. It cannot be undone.")
+                Text("This permanently erases \(count) encrypted documents from this Mac. It cannot be undone.")
+            }
+            // A week after a crew list went out its trip's personal data is
+            // deleted; checked whenever the app comes back to the front, so a
+            // window left open for days still honours it.
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                store.purgeExpiredTripsAndReport()
             }
             .alert("CrewListr Pro", isPresented: Binding(
                 get: { store.errorMessage != nil },
@@ -269,7 +275,7 @@ struct RootView: View {
                 .help("Marks every field that passes validation as checked against the image")
 
                 Button {
-                    store.rejectDocument(document.id, reason: "Rejected by operator: the document is not usable.")
+                    store.rejectDocument(document.id, reason: String(localized: "Rejected by operator: the document is not usable."))
                 } label: {
                     Label("Reject", systemImage: "xmark.circle")
                 }

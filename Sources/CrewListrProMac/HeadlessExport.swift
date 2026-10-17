@@ -279,9 +279,6 @@ enum HeadlessExport {
                 blockers.append("\(document.originalName): \(pending.map(\.label).joined(separator: ", ")) unconfirmed.")
             }
         }
-        if !documents.isEmpty, !data.assignments.contains(where: { $0.tripID == trip.id && $0.role == .skipper }) {
-            blockers.append("Nominate a skipper.")
-        }
         return blockers
     }
 

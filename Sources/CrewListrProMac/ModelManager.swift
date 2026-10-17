@@ -32,9 +32,9 @@ enum ModelDownloadError: LocalizedError {
     case insufficientDisk, integrity, offline
     var errorDescription: String? {
         switch self {
-        case .insufficientDisk: "At least 8 GB of free disk space is required for this model."
-        case .integrity: "The downloaded model did not pass its SHA-256 integrity check."
-        case .offline: "The model could not be downloaded. Check your internet connection and retry."
+        case .insufficientDisk: String(localized: "At least 8 GB of free disk space is required for this model.")
+        case .integrity: String(localized: "The downloaded model did not pass its SHA-256 integrity check.")
+        case .offline: String(localized: "The model could not be downloaded. Check your internet connection and retry.")
         }
     }
 }

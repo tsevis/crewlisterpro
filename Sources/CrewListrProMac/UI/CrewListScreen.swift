@@ -34,9 +34,9 @@ struct CrewListScreen: View {
     }
 
     private var heading: String {
-        guard let boat = store.selectedBoat, let trip = store.selectedTrip else { return "No trip selected" }
-        let name = boat.name.isEmpty ? "Untitled yacht" : boat.name
-        return "\(name) · \(boat.flag.isEmpty ? "no flag" : boat.flag) · \(VoyageDate.printed(trip.departureDate)) → \(VoyageDate.printed(trip.returnDate))"
+        guard let boat = store.selectedBoat, let trip = store.selectedTrip else { return String(localized: "No trip selected") }
+        let name = boat.name.isEmpty ? String(localized: "Untitled yacht") : boat.name
+        return "\(name) · \(boat.flag.isEmpty ? String(localized: "no flag") : boat.flag) · \(VoyageDate.printed(trip.departureDate)) → \(VoyageDate.printed(trip.returnDate))"
     }
 
     /// `.batch-metrics`
@@ -71,7 +71,7 @@ struct CrewListScreen: View {
             // second fact about the person, and a passenger who signs reads as
             // neither "Passenger" nor "Client" alone.
             TableColumn("Client") { row in
-                Text(row.isClient ? "Signs" : "")
+                (row.isClient ? Text("Signs") : Text(verbatim: ""))
                     .font(Theme.Font.supportEmphasis)
                     .foregroundStyle(Theme.accentText)
             }
@@ -118,16 +118,16 @@ struct ExportButton: View {
     /// which of the two it is about to do.
     private var exportLabel: String {
         guard let folder = store.standingExportFolder else {
-            return "Export \(store.settings.exportFilesDescription)…"
+            return String(localized: "Export \(store.settings.exportFilesDescription)…")
         }
-        return "Export to \(folder.lastPathComponent)"
+        return String(localized: "Export to \(folder.lastPathComponent)")
     }
 
     private var exportHelp: String {
         guard let folder = store.standingExportFolder else {
-            return "Write \(store.settings.exportDescription) into a folder you choose"
+            return String(localized: "Write \(store.settings.exportDescription) into a folder you choose")
         }
-        return "Write \(store.settings.exportDescription) into \(folder.path(percentEncoded: false)) — set in Settings. Right-click to choose a different folder."
+        return String(localized: "Write \(store.settings.exportDescription) into \(folder.path(percentEncoded: false)) — set in Settings. Right-click to choose a different folder.")
     }
 
     var body: some View {
@@ -163,6 +163,7 @@ struct ExportButton: View {
 
     /// The folder set in Settings, or the one the operator picks now.
     private func export(askingForFolder: Bool) {
+        guard confirmsMissingSkipper() else { return }
         guard let directory = askingForFolder ? chooseFolder() : (store.standingExportFolder ?? chooseFolder()) else { return }
         do {
             let written = try store.exportSelectedTrip(to: directory)
@@ -175,13 +176,30 @@ struct ExportButton: View {
         }
     }
 
+    /// A reminder, not a gate: the Hellenic Coast Guard no longer requires a
+    /// skipper. True to go ahead. "Don't show again" is AppKit's own
+    /// suppression checkbox, and it is honoured whichever button is pressed.
+    private func confirmsMissingSkipper() -> Bool {
+        guard store.selectedTripNeedsSkipperWarning else { return true }
+        let alert = NSAlert()
+        alert.messageText = String(localized: "No skipper is named on this trip.")
+        alert.informativeText = String(localized: "The crew list will be exported with the skipper section blank.")
+        alert.addButton(withTitle: String(localized: "Export Anyway"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = String(localized: "Don't show again")
+        let proceed = alert.runModal() == .alertFirstButtonReturn
+        if alert.suppressionButton?.state == .on { store.stopWarningWhenNoSkipper() }
+        return proceed
+    }
+
     private func chooseFolder() -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
-        panel.prompt = "Export Here"
-        panel.message = "Choose the folder for \(store.settings.exportDescription)."
+        panel.prompt = String(localized: "Export Here")
+        panel.message = String(localized: "Choose the folder for \(store.settings.exportDescription).")
         // A directory picker, not a save panel whose filename was then thrown
         // away in favour of its parent directory.
         guard panel.runModal() == .OK else { return nil }
