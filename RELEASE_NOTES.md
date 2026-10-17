@@ -1,3 +1,11 @@
+# Unreleased
+
+**German, Spanish, French and Italian.** The interface — Mac, iPhone and iPad,
+the share extension and the camera and photo permission prompts — is now also in
+Deutsch, Español, Français and Italiano. Settings → Language lists them beside
+English, Ελληνικά and Українська. The crew list, the PDF and the passenger
+manifest are unchanged: they keep the port authority's English and Greek wording.
+
 # CrewListr Pro 0.6.0
 
 **Greek and Ukrainian.** The whole interface — Mac, iPhone and iPad, the share

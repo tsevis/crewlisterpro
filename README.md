@@ -80,7 +80,8 @@ place they are held.
 ![Settings](docs/screenshots/04-settings.png)
 
 Defaults for this Mac, grouped by the moment each one applies: the interface
-language (the system's, English, Ελληνικά or Українська — applied at the next
+language (the system's, Deutsch, English, Español, Français, Italiano, Ελληνικά or
+Українська — applied at the next
 launch), when a trip is made (charter start day and length), when a yacht is
 added (flag and port of registry, since most fleets share both), what an export
 writes (CSV, PDF, XLSX; the reminder when a trip names no skipper; the file-name

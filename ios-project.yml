@@ -92,7 +92,7 @@ targets:
         CFBundleShortVersionString: "${CREWLISTR_VERSION}"
         CFBundleVersion: "${CREWLISTR_BUILD}"
         # The interface ships in these; the catalog is Resources/Localizable.xcstrings.
-        CFBundleLocalizations: [en, el, uk]
+        CFBundleLocalizations: [en, de, el, es, fr, it, uk]
         UILaunchScreen:
           UIColorName: ""
         UISupportedInterfaceOrientations:

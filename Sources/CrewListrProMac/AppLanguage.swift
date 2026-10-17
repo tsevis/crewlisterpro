@@ -11,7 +11,11 @@ import Foundation
 /// the port authority's own bilingual English/Greek wording whatever is chosen.
 enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     case system = ""
+    case german = "de"
     case english = "en"
+    case spanish = "es"
+    case french = "fr"
+    case italian = "it"
     case greek = "el"
     case ukrainian = "uk"
 
@@ -24,7 +28,11 @@ enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     var nativeName: String {
         switch self {
         case .system: String(localized: "System language")
+        case .german: "Deutsch"
         case .english: "English"
+        case .spanish: "Español"
+        case .french: "Français"
+        case .italian: "Italiano"
         case .greek: "Ελληνικά"
         case .ukrainian: "Українська"
         }
