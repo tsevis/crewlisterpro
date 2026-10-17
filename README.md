@@ -2,7 +2,7 @@
 
 <img src="docs/icon-masked.png" alt="CrewListr Pro" width="128">
 
-**Offline crew-list preparation for charter yachts.** Version 0.6.0 · macOS 15+ (Apple Silicon) · iOS 17+
+**Offline crew-list preparation for charter yachts.** Version 0.7.0 · macOS 15+ (Apple Silicon) · iOS 17+
 
 CrewListr Pro turns photographed or scanned identity documents into the crew list a port
 authority expects. Extraction runs entirely on the device using Vision OCR and ICAO 9303
@@ -13,10 +13,10 @@ lives in a SQLCipher database and original files are sealed with AES-GCM under a
 Keychain-held key. **Nothing can be exported until an operator has confirmed every field
 against the document image.**
 
-**New in 0.6.0** · The interface speaks **Greek and Ukrainian** as well as English ·
-a trip with no skipper **exports with a reminder** instead of being blocked · a trip's
-passports, scans and people are **deleted a week after its crew list is first exported** ·
-the boarding port is no longer lost when you leave the Trip screen mid-edit. See
+**New in 0.7.0** · The interface also speaks **German, Spanish, French and Italian**,
+beside English, Greek and Ukrainian. 0.6.0 added Greek and Ukrainian, an export with
+no skipper **with a reminder** instead of a block, and trips **deleted a week after
+their crew list is first exported**. See
 [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
 **Topics** · `crew-list` `yacht-charter` `maritime` `port-clearance` `passport` `mrz`
@@ -80,9 +80,8 @@ place they are held.
 ![Settings](docs/screenshots/04-settings.png)
 
 Defaults for this Mac, grouped by the moment each one applies: the interface
-language (the system's, Deutsch, English, Español, Français, Italiano, Ελληνικά or
-Українська — applied at the next
-launch), when a trip is made (charter start day and length), when a yacht is
+language (the system's, Deutsch, English, Español, Français, Italiano, Ελληνικά
+or Українська — applied at the next launch), when a trip is made (charter start day and length), when a yacht is
 added (flag and port of registry, since most fleets share both), what an export
 writes (CSV, PDF, XLSX; the reminder when a trip names no skipper; the file-name
 prefix; a standing folder or ask-each-time; reveal afterwards), the optional
