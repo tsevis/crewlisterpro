@@ -55,13 +55,13 @@ extension DocumentIntake {
                 // representation and offer only bytes. A document with a
                 // made-up name still beats no document.
                 guard let data = try await item.loadTransferable(type: Data.self) else {
-                    problem = "One of the pictures could not be read from the photo library."
+                    problem = String(localized: "One of the pictures could not be read from the photo library.")
                     continue
                 }
                 let suffix = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
                 stage(data, named: "Photo \(Self.stamp()).\(suffix)", origin: .photos)
             } catch {
-                problem = "A picture could not be read from the photo library: \(error.localizedDescription)"
+                problem = String(localized: "A picture could not be read from the photo library: \(error.localizedDescription)")
             }
         }
     }

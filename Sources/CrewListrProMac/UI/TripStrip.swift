@@ -87,7 +87,7 @@ struct TripStrip: View {
                 TripDayFace(day: day, detail: detail(of: only), isSelected: selected != nil)
             }
             .buttonStyle(.plain)
-            .help("\(VoyageDate.printed(day.date)) · \(detail(of: only))")
+            .help("\(fullDate(day.date)) · \(detail(of: only))")
         } else {
             Menu {
                 ForEach(day.trips) { trip in
@@ -102,7 +102,7 @@ struct TripStrip: View {
                 // label takes the click the menu needs to open with, and the
                 // chip stops responding at all.
                 TripDayFace(day: day,
-                            detail: selected.map(detail(of:)) ?? "\(day.trips.count) boats",
+                            detail: selected.map(detail(of:)) ?? String(localized: "\(day.trips.count) boats"),
                             isSelected: selected != nil,
                             showsMenuHint: true)
             }
@@ -113,7 +113,7 @@ struct TripStrip: View {
             .buttonStyle(.plain)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("\(VoyageDate.printed(day.date)) · \(day.trips.count) boats")
+            .help("\(fullDate(day.date)) · \(day.trips.count) boats")
         }
     }
 
@@ -165,21 +165,27 @@ struct TripStrip: View {
 
     // MARK: - What a chip says
 
+    /// The whole date, for a chip's tooltip: the face leaves the year out.
+    private func fullDate(_ date: Date) -> String {
+        date.formatted(date: .complete, time: .omitted)
+    }
+
     func name(of trip: Trip) -> String {
-        store.boat(for: trip)?.displayName ?? "Untitled yacht"
+        store.boat(for: trip)?.displayName ?? String(localized: "Untitled yacht")
     }
 
     /// The boat and the one number an operator is tracking for it. The date is
     /// on the face of the chip; this is the line under it.
     func detail(of trip: Trip) -> String {
-        let prefix = trip.isArchived ? "Archived · " : ""
-        return "\(prefix)\(name(of: trip)) · \(readiness(of: trip))"
+        let name = name(of: trip)
+        let readiness = readiness(of: trip)
+        return trip.isArchived ? String(localized: "Archived · \(name) · \(readiness)") : "\(name) · \(readiness)"
     }
 
     func readiness(of trip: Trip) -> String {
         let documents = store.data.documents.filter { $0.tripID == trip.id }
-        guard !documents.isEmpty else { return "No documents" }
-        return "\(documents.filter { $0.canExport() }.count)/\(documents.count) cleared"
+        guard !documents.isEmpty else { return String(localized: "No documents") }
+        return String(localized: "\(documents.filter { $0.canExport() }.count)/\(documents.count) cleared")
     }
 }
 
@@ -201,7 +207,10 @@ private struct TripDayFace: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
-                    Text(VoyageDate.short(day.date))
+                    // In the reader's language, and uppercased on the view so the
+                    // chip keeps the printed form's look whatever the locale.
+                    Text(day.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                        .textCase(.uppercase)
                         .font(Theme.Font.supportEmphasis.monospacedDigit())
                         .foregroundStyle(isSelected || hovering ? Theme.ink : Theme.inkSecondary)
                         .lineLimit(1)

@@ -22,24 +22,24 @@ enum CrewField: String, CaseIterable, Identifiable, Codable, Sendable {
     /// Label shown in the review pane.
     var label: String {
         switch self {
-        case .fullName: "Full name"
-        case .documentNumber: "Document no."
-        case .nationality: "Nationality"
-        case .birthDate: "Date of birth"
-        case .sex: "Sex"
-        case .expiryDate: "Date of expiry"
-        case .documentType: "Document type"
+        case .fullName: String(localized: "Full name")
+        case .documentNumber: String(localized: "Document no.")
+        case .nationality: String(localized: "Nationality")
+        case .birthDate: String(localized: "Date of birth")
+        case .sex: String(localized: "Sex")
+        case .expiryDate: String(localized: "Date of expiry")
+        case .documentType: String(localized: "Document type")
         }
     }
 
     /// Short hint rendered under an empty or invalid field.
     var placeholder: String {
         switch self {
-        case .fullName: "GIVEN NAMES SURNAME"
+        case .fullName: String(localized: "GIVEN NAMES SURNAME", comment: "Placeholder showing the order to type a name in; the name itself is always typed in Latin letters.")
         case .documentNumber: "AB1234567"
         case .nationality: "GREEK"
         case .birthDate, .expiryDate: "20 OCT 1972"
-        case .sex: "M or F"
+        case .sex: String(localized: "M or F", comment: "Placeholder; M and F are the letters typed, so keep them as they are.")
         case .documentType: "passport"
         }
     }
@@ -138,36 +138,36 @@ enum CrewFieldValidator {
     /// rather than a pattern: the field shows and accepts `20 OCT 1972`, the
     /// form the document itself is printed in, and "YYYY-MM-DD" would send the
     /// operator looking for a shape that is no longer on screen.
-    static let dateAdvice = "Use a date like 20 OCT 1972."
+    static let dateAdvice = String(localized: "Use a date like 20 OCT 1972.", comment: "20 OCT 1972 is the exact form typed into the field; keep it in English.")
 
     /// Dates are compared against a fixed reference rather than `Date.now` so a
     /// validation result is reproducible in tests and in a saved document.
     static func validate(_ field: CrewField, value: String, today: Date = .now) -> FieldValidation {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return field.isRequiredForExport ? .invalid("Required on the crew list.") : .valid
+            return field.isRequiredForExport ? .invalid(String(localized: "Required on the crew list.")) : .valid
         }
         switch field {
         case .fullName:
-            if trimmed.count < 2 { return .invalid("Too short to be a name.") }
+            if trimmed.count < 2 { return .invalid(String(localized: "Too short to be a name.")) }
             // No identity document carries digits in the name field.
-            if trimmed.contains(where: { $0.isNumber }) { return .invalid("A name cannot contain digits.") }
+            if trimmed.contains(where: { $0.isNumber }) { return .invalid(String(localized: "A name cannot contain digits.")) }
             // A crew list carries the Latin transliteration printed on the
             // document, because that is what a port authority reads. A name in
             // another script is legitimate on the page and unusable on the list.
             if let offending = trimmed.first(where: { !isNameCharacter($0) }) {
-                return .invalid("A crew list needs the Latin spelling from the document — \"\(offending)\" is not Latin.")
+                return .invalid(String(localized: "A crew list needs the Latin spelling from the document — \"\(String(offending))\" is not Latin."))
             }
             if trimmed.split(separator: " ").contains(where: looksLikeNoise) {
-                return .warning("Looks like OCR noise — check against the document.")
+                return .warning(String(localized: "Looks like OCR noise — check against the document."))
             }
             return .valid
         case .documentNumber:
-            if trimmed.count < 5 { return .warning("Unusually short document number.") }
-            if trimmed.contains(" ") { return .warning("Contains a space.") }
+            if trimmed.count < 5 { return .warning(String(localized: "Unusually short document number.")) }
+            if trimmed.contains(" ") { return .warning(String(localized: "Contains a space.")) }
             return .valid
         case .nationality:
-            if trimmed.count < 2 { return .invalid("Use a country name or 3-letter code.") }
+            if trimmed.count < 2 { return .invalid(String(localized: "Use a country name or 3-letter code.")) }
             // No country code and no country's name contains a digit, so one
             // here is the camera's, not the document's. This is the field on
             // the machine-readable zone that no check digit covers, so nothing
@@ -176,21 +176,21 @@ enum CrewFieldValidator {
             // repairs the shapes it can be sure of; this refuses the rest
             // rather than let one be confirmed by accident.
             if let digit = trimmed.first(where: \.isNumber) {
-                return .invalid("\"\(digit)\" is a digit — a nationality has none. Check it against the document.")
+                return .invalid(String(localized: "\"\(String(digit))\" is a digit — a nationality has none. Check it against the document."))
             }
             return .valid
         case .sex:
-            return ["M", "F", "X"].contains(trimmed.uppercased()) ? .valid : .invalid("Use M, F or X.")
+            return ["M", "F", "X"].contains(trimmed.uppercased()) ? .valid : .invalid(String(localized: "Use M, F or X.", comment: "M, F and X are the letters typed; keep them as they are."))
         case .documentType:
             return .valid
         case .birthDate:
             guard let date = isoDate(trimmed) else { return .invalid(Self.dateAdvice) }
-            if date > today { return .invalid("Birth date is in the future.") }
-            if date < Date(timeIntervalSince1970: -3_155_760_000) { return .warning("Over 100 years ago — check the century.") }
+            if date > today { return .invalid(String(localized: "Birth date is in the future.")) }
+            if date < Date(timeIntervalSince1970: -3_155_760_000) { return .warning(String(localized: "Over 100 years ago — check the century.")) }
             return .valid
         case .expiryDate:
             guard let date = isoDate(trimmed) else { return .invalid(Self.dateAdvice) }
-            return date < today ? .warning("Document has expired.") : .valid
+            return date < today ? .warning(String(localized: "Document has expired.")) : .valid
         }
     }
 
@@ -256,13 +256,13 @@ enum ContactValidator {
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
         // Optional. A skipper who did not give an address is not an error.
         guard !trimmed.isEmpty else { return .valid }
-        guard !trimmed.contains(" ") else { return .warning("An email address cannot contain a space.") }
+        guard !trimmed.contains(" ") else { return .warning(String(localized: "An email address cannot contain a space.")) }
         // Deliberately shallow. The full grammar of an address is famously
         // unmatchable, and an over-strict rule that rejects a working address
         // is worse than a loose one that accepts a typo the operator can see.
         let shape = #"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"#
         guard trimmed.range(of: shape, options: .regularExpression) != nil else {
-            return .warning("Doesn't look like an email address — check it.")
+            return .warning(String(localized: "Doesn't look like an email address — check it."))
         }
         return .valid
     }

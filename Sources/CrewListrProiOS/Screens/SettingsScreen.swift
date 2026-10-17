@@ -11,6 +11,8 @@ struct SettingsScreen: View {
     let onShowAbout: () -> Void
 
     @State private var showingVersions = false
+    /// Read once: the choice is stored at once but applies from the next launch.
+    @State private var language = AppLanguage.current()
 
     private var settings: AppSettings { store.settings }
 
@@ -18,12 +20,23 @@ struct SettingsScreen: View {
         NavigationStack {
             List {
                 Section {
+                    Picker("Interface", selection: $language) {
+                        ForEach(AppLanguage.allCases) { Text(verbatim: $0.nativeName).tag($0) }
+                    }
+                    .onChange(of: language) { _, chosen in chosen.apply() }
+                } header: {
+                    Text("Language")
+                } footer: {
+                    Text("Applies the next time CrewListr Pro opens. The crew list, the PDF and the passenger manifest keep the port authority's English and Greek wording in every language.")
+                }
+
+                Section {
                     Picker("Charters start on", selection: binding(\.charterStartWeekday)) {
                         ForEach(1...7, id: \.self) { weekday in
                             Text(AppSettings.weekdayName(weekday)).tag(weekday)
                         }
                     }
-                    Stepper("Charter runs \(settings.charterLengthDays) day\(settings.charterLengthDays == 1 ? "" : "s")",
+                    Stepper("Charter runs \(settings.charterLengthDays) days",
                             value: binding(\.charterLengthDays),
                             in: 1...AppSettings.longestCharterDays)
                 } header: {
@@ -55,6 +68,7 @@ struct SettingsScreen: View {
                     Toggle("Printed crew list (PDF)", isOn: binding(\.writesPDF))
                     Toggle("Spreadsheet (CSV)", isOn: binding(\.writesCSV))
                     Toggle("Passenger manifest (XLSX)", isOn: binding(\.writesManifest))
+                    Toggle("Remind me when a trip names no skipper", isOn: binding(\.warnsWhenNoSkipper))
                     LabeledContent("File name starts with") {
                         CommitTextField(placeholder: AppSettings.defaultFileNamePrefix,
                                         value: settings.fileNamePrefix, uppercased: false,
@@ -189,7 +203,7 @@ struct VersionsSheet: View {
                 }
                 Button("Cancel", role: .cancel) { restoring = nil }
             } message: {
-                Text(restoring.map { "This replaces everything with \(CrewStore.describe($0)) as of \($0.created.formatted(date: .abbreviated, time: .shortened))." } ?? "")
+                Text(restoring.map { String(localized: "This replaces everything with \(CrewStore.describe($0)) as of \($0.created.formatted(date: .abbreviated, time: .shortened)).") } ?? "")
             }
         }
     }

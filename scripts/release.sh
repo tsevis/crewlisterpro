@@ -195,12 +195,19 @@ PLISTEOF
 
 "$ROOT/scripts/make-icon.sh" "$ROOT/Resources/AppIcon.png" "$APP/Contents/Resources/$ICON_FILE.icns"
 
+# The interface's translations. SwiftUI and `String(localized:)` look them up in
+# the main bundle, and `swift build` leaves the catalog uncompiled, so it is
+# compiled straight into Contents/Resources as one .lproj per language.
+xcrun xcstringstool compile "$ROOT/Resources/Localizable.xcstrings" --output-directory "$APP/Contents/Resources"
+
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key><string>CrewListrProMac</string>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleLocalizations</key><array><string>en</string><string>el</string><string>uk</string></array>
     <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
     <key>CFBundleName</key><string>${APP_NAME}</string>
     <key>CFBundleDisplayName</key><string>${APP_NAME}</string>

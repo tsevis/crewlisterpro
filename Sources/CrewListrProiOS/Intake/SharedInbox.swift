@@ -53,19 +53,19 @@ enum SharedInbox {
         var errorDescription: String? {
             switch self {
             case .noContainer:
-                "CrewListr Pro could not reach its shared folder, so the document could not be handed to the app."
+                String(localized: "CrewListr Pro could not reach its shared folder, so the document could not be handed to the app.")
             case .tooLarge(let name, let bytes):
-                "\(name) is \(bytes / 1_048_576) MB, which is larger than a document this app will take."
+                String(localized: "\(name) is \(bytes / 1_048_576) MB, which is larger than a document this app will take.")
             case .unsupported(let name):
-                "\(name) is not an image or a PDF."
+                String(localized: "\(name) is not an image or a PDF.")
             }
         }
 
         var recoverySuggestion: String? {
             switch self {
-            case .noContainer: "Reinstalling CrewListr Pro restores it."
-            case .tooLarge: "Send the passport as a photograph rather than as a video or an archive."
-            case .unsupported: "Share the passport as a photograph or a PDF scan."
+            case .noContainer: String(localized: "Reinstalling CrewListr Pro restores it.")
+            case .tooLarge: String(localized: "Send the passport as a photograph rather than as a video or an archive.")
+            case .unsupported: String(localized: "Share the passport as a photograph or a PDF scan.")
             }
         }
     }

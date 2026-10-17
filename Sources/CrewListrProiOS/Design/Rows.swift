@@ -19,7 +19,7 @@ struct TripRow: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(boat?.displayName ?? "Untitled yacht")
+                    Text(boat?.displayName ?? String(localized: "Untitled yacht"))
                         .font(Theme.Font.bodyEmphasis)
                         .foregroundStyle(Theme.ink)
                         .lineLimit(1)

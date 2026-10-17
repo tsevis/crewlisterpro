@@ -86,11 +86,11 @@ struct BoatRow: View {
     /// twice on every row in a fleet nobody has nicknamed — which is most of
     /// them.
     private var subtitle: String {
-        guard boat.isComplete else { return "Needs a registered name before it can print" }
+        guard boat.isComplete else { return String(localized: "Needs a registered name before it can print") }
         var parts: [String] = []
         if boat.displayName != boat.name { parts.append(boat.name) }
         parts.append(contentsOf: [boat.flag, boat.registrationNumber].filter { !$0.isEmpty })
-        return parts.isEmpty ? "No flag or registration number yet" : parts.joined(separator: "  ·  ")
+        return parts.isEmpty ? String(localized: "No flag or registration number yet") : parts.joined(separator: "  ·  ")
     }
 
     var body: some View {
@@ -107,7 +107,7 @@ struct BoatRow: View {
             Spacer(minLength: 6)
             let trips = store.tripCount(forBoatID: boat.id)
             if trips > 0 {
-                Text("\(trips) charter\(trips == 1 ? "" : "s")")
+                Text("\(trips) charters")
                     .font(Theme.Font.meta)
                     .foregroundStyle(Theme.inkTertiary)
             }
@@ -137,7 +137,7 @@ struct FleetDetailScreen: View {
             }
         }
         .background(Theme.ground)
-        .navigationTitle(boat?.displayName ?? "Yacht")
+        .navigationTitle(boat?.displayName ?? String(localized: "Yacht"))
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -164,7 +164,7 @@ struct FleetDetailScreen: View {
             }
 
             Section {
-                field("Your name for it", boat.nickname, placeholder: "the blue one", uppercased: false) {
+                field("Your name for it", boat.nickname, placeholder: String(localized: "the blue one"), uppercased: false) {
                     var updated = boat; updated.nickname = $0; store.updateBoat(updated)
                 }
             } footer: {
@@ -198,7 +198,7 @@ struct FleetDetailScreen: View {
             let documents = store.documentCount(forBoatID: boat.id)
             Text(trips == 0
                  ? "This yacht is on no charters."
-                 : "This yacht is on \(trips) charter\(trips == 1 ? "" : "s") holding \(documents) encrypted document\(documents == 1 ? "" : "s"). Deleting it deletes those too, and cannot be undone.")
+                 : "This yacht is on \(trips) charters holding \(documents) encrypted documents. Deleting it deletes those too, and cannot be undone.")
         }
     }
 
@@ -206,7 +206,7 @@ struct FleetDetailScreen: View {
     /// left, not on every keystroke, so a half-typed registration number is
     /// never what the crew list would print.
     @ViewBuilder
-    private func field(_ label: String, _ value: String, placeholder: String,
+    private func field(_ label: LocalizedStringKey, _ value: String, placeholder: String,
                        uppercased: Bool, onCommit: @escaping (String) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(Theme.Font.meta).foregroundStyle(Theme.inkSecondary)
@@ -251,6 +251,9 @@ struct CommitTextField: View {
             .onChange(of: focused) { _, isFocused in if !isFocused { commit() } }
             .onChange(of: value) { _, newValue in if !focused { draft = newValue } }
             .onAppear { draft = value }
+            // Navigating back while still typing removes the field without
+            // the focus observer firing; save here or the value is lost.
+            .onDisappear { commit() }
     }
 
     /// Saves, then shows what the store kept — not what was typed.

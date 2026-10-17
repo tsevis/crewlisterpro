@@ -129,10 +129,12 @@ final class HeadlessExportTests: XCTestCase {
         XCTAssertTrue(blockers.contains { $0.contains("Sex") }, "\(blockers)")
     }
 
-    func testAMissingSkipperBlocks() {
+    /// The Hellenic Coast Guard no longer asks for a skipper on the crew list,
+    /// so a trip without one exports; the app warns instead.
+    func testAMissingSkipperDoesNotBlock() {
         var (data, trip, boat) = makeReadyData()
         data.assignments[0].role = .passenger
-        XCTAssertTrue(HeadlessExport.blockers(in: data, for: trip, boat: boat).contains("Nominate a skipper."))
+        XCTAssertEqual(HeadlessExport.blockers(in: data, for: trip, boat: boat), [])
     }
 
     func testARejectedDocumentBlocks() {

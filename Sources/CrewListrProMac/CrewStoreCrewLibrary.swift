@@ -50,7 +50,7 @@ extension CrewStore {
     func keepInCrewLibrary(documentID: UUID) async -> Bool {
         guard let document = data.documents.first(where: { $0.id == documentID }) else { return false }
         guard !SavedCrewMember.key(number: document[.documentNumber], name: document[.fullName]).isEmpty else {
-            errorMessage = "This document has neither a name nor a document number yet. Confirm at least one of them before keeping the person for later — the library is a list you pick from, and there would be nothing to pick."
+            errorMessage = String(localized: "This document has neither a name nor a document number yet. Confirm at least one of them before keeping the person for later — the library is a list you pick from, and there would be nothing to pick.")
             return false
         }
         guard let secureStore else { return false }
@@ -75,7 +75,7 @@ extension CrewStore {
             do {
                 saved.encryptedFileName = try await secureStore.keepInCrewLibrary(originalNamed: document.encryptedFileName)
             } catch {
-                errorMessage = "\(saved.displayName) was kept, but their scan could not be copied into the library: \(error.localizedDescription)"
+                errorMessage = String(localized: "\(saved.displayName) was kept, but their scan could not be copied into the library: \(error.localizedDescription)")
             }
         }
 
@@ -118,14 +118,14 @@ extension CrewStore {
     func addFromCrewLibrary(_ savedID: UUID, toTripWith tripID: UUID? = nil) async -> Bool {
         guard let saved = savedCrewMember(withID: savedID) else { return false }
         guard let tripID = tripID ?? selectedTripID, data.trips.contains(where: { $0.id == tripID }) else {
-            errorMessage = "Create or select a trip before adding someone from the crew library."
+            errorMessage = String(localized: "Create or select a trip before adding someone from the crew library.")
             return false
         }
         let key = SavedCrewMember.key(number: saved.documentNumber, name: saved.fullName)
         guard !data.documents.contains(where: {
             $0.tripID == tripID && SavedCrewMember.key(number: $0[.documentNumber], name: $0[.fullName]) == key
         }) else {
-            errorMessage = "\(saved.displayName) is already on this trip."
+            errorMessage = String(localized: "\(saved.displayName) is already on this trip.")
             return false
         }
         guard let secureStore else { return false }
@@ -154,7 +154,7 @@ extension CrewStore {
                 // against, and this app does not put a name on a crew list
                 // that nobody can check. Better to say so than to add a row
                 // that can never be cleared.
-                errorMessage = "\(saved.displayName)'s scan could not be read from the crew library, so they were not added: \(error.localizedDescription)"
+                errorMessage = String(localized: "\(saved.displayName)'s scan could not be read from the crew library, so they were not added: \(error.localizedDescription)")
                 return false
             }
         }
@@ -186,9 +186,9 @@ extension CrewStore {
     /// What the review pane says about a document that came from the library.
     private static func libraryProvenance(_ saved: SavedCrewMember) -> String {
         guard let confirmed = saved.confirmedAt else {
-            return "From the crew library, where they were kept before every field had been confirmed. Check all of them against the scan."
+            return String(localized: "From the crew library, where they were kept before every field had been confirmed. Check all of them against the scan.")
         }
-        return "From the crew library — these values were confirmed against this scan on \(VoyageDate.printed(confirmed)). Check them again before export."
+        return String(localized: "From the crew library — these values were confirmed against this scan on \(VoyageDate.printed(confirmed)). Check them again before export.")
     }
 
     // MARK: - Forgetting someone

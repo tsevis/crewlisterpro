@@ -35,8 +35,8 @@ struct TripScreen: View {
 
         var message: String {
             switch self {
-            case .saved: "Version saved"
-            case .alreadyCurrent: "Already saved — nothing has changed"
+            case .saved: String(localized: "Version saved")
+            case .alreadyCurrent: String(localized: "Already saved — nothing has changed")
             }
         }
 
@@ -91,7 +91,10 @@ struct TripScreen: View {
                                     .frame(maxWidth: 220)
                                 }
                                 FormRule()
-                                FormCaption("New trips already run \(charterRhythm). Moving the departure moves the return with it and keeps the charter the same length; pick a return date to override that. Boarding time and port go on the passenger manifest.")
+                                FormCaption(rhythmCaption)
+                                if let deletion = TripRetention.deletionDate(for: current) {
+                                    FormCaption("This trip's passports and scans are deleted on \(deletion.formatted(date: .long, time: .omitted)), \(TripRetention.days) days after the crew list was first exported.")
+                                }
                             }
                         }
 
@@ -121,10 +124,14 @@ struct TripScreen: View {
         trip = store.selectedTrip
     }
 
-    private var charterRhythm: String {
+    /// Two whole sentences rather than one with the rhythm spliced into it, so
+    /// a translation can inflect the weekday for whichever it says.
+    private var rhythmCaption: String {
         let day = AppSettings.weekdayName(store.settings.charterStartWeekday)
         let days = store.settings.charterLengthDays
-        return days == 7 ? "\(day) to \(day)" : "\(days) days from a \(day)"
+        return days == 7
+            ? String(localized: "New trips already run \(day) to \(day). Moving the departure moves the return with it and keeps the charter the same length; pick a return date to override that. Boarding time and port go on the passenger manifest.")
+            : String(localized: "New trips already run \(days) days from a \(day). Moving the departure moves the return with it and keeps the charter the same length; pick a return date to override that. Boarding time and port go on the passenger manifest.")
     }
 
     /// Takes a checkpoint, and says what happened. A snapshot is skipped when
@@ -213,12 +220,12 @@ struct TripScreen: View {
     /// The header boxes as one line, so a missing flag or registration number
     /// is visible from the trip without opening the Fleet.
     private var printedHeader: String {
-        guard let boat = store.selectedBoat else { return "No yacht on this trip." }
+        guard let boat = store.selectedBoat else { return String(localized: "No yacht on this trip.") }
         let values = [
-            boat.isComplete ? boat.name : "no name",
-            boat.flag.isEmpty ? "no flag" : boat.flag,
-            boat.registrationPort.isEmpty ? "no port of registry" : boat.registrationPort,
-            boat.registrationNumber.isEmpty ? "no registration no." : boat.registrationNumber,
+            boat.isComplete ? boat.name : String(localized: "no name"),
+            boat.flag.isEmpty ? String(localized: "no flag") : boat.flag,
+            boat.registrationPort.isEmpty ? String(localized: "no port of registry") : boat.registrationPort,
+            boat.registrationNumber.isEmpty ? String(localized: "no registration no.") : boat.registrationNumber,
         ]
         return values.joined(separator: "  ·  ")
     }
@@ -283,11 +290,19 @@ struct TripScreen: View {
             }
             Button("Cancel", role: .cancel) { pendingRestore = nil }
         } message: {
-            Text("""
-            This replaces what is on this Mac now with \(pendingRestore.map(CrewStore.describe) ?? "an earlier version").
+            if let pendingRestore {
+                Text("""
+                This replaces what is on this Mac now with \(CrewStore.describe(pendingRestore)).
 
-            What you have now is kept as another version first, so you can step back again.
-            """)
+                What you have now is kept as another version first, so you can step back again.
+                """)
+            } else {
+                Text("""
+                This replaces what is on this Mac now with an earlier version.
+
+                What you have now is kept as another version first, so you can step back again.
+                """)
+            }
         }
     }
 
@@ -313,13 +328,13 @@ struct TripScreen: View {
 
     // MARK: - Pieces
 
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func section<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
         FormSection(title: title) { content() }
     }
 
     private var rule: some View { FormRule() }
 
-    private func datePicker(_ label: String, selection: Binding<Date>, range: PartialRangeFrom<Date>?) -> some View {
+    private func datePicker(_ label: LocalizedStringKey, selection: Binding<Date>, range: PartialRangeFrom<Date>?) -> some View {
         FormRow(label: label) {
             Group {
                 if let range {

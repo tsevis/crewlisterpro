@@ -41,11 +41,16 @@ enum StoreError: LocalizedError {
             // locked Keychain, a denied ACL and a stale app with the same
             // bundle identifier indistinguishable on screen. The status is the
             // one thing that separates them, so it travels with the sentence.
-            "The local encryption key could not be accessed: \(stage.description) failed with OSStatus \(status) (\(Self.explain(status)))."
+            switch stage {
+            case .read:
+                String(localized: "The local encryption key could not be accessed: reading the existing key failed with OSStatus \(String(status)) (\(Self.explain(status))).")
+            case .create:
+                String(localized: "The local encryption key could not be accessed: storing a new key failed with OSStatus \(String(status)) (\(Self.explain(status))).")
+            }
         case .keyFileUnwritable(let reason):
-            "The local encryption key could not be written to disk: \(reason)."
-        case .invalidPayload: "Encrypted local data could not be decoded."
-        case .database(let message): "Encrypted database error: \(message)"
+            String(localized: "The local encryption key could not be written to disk: \(reason).")
+        case .invalidPayload: String(localized: "Encrypted local data could not be decoded.")
+        case .database(let message): String(localized: "Encrypted database error: \(message)")
         }
     }
 
@@ -53,7 +58,7 @@ enum StoreError: LocalizedError {
     /// status; not showing it would throw away the readable half of the answer.
     /// Codes it does not know still reach the operator as a number.
     private static func explain(_ status: OSStatus) -> String {
-        SecCopyErrorMessageString(status, nil) as String? ?? "no description available"
+        SecCopyErrorMessageString(status, nil) as String? ?? String(localized: "no description available")
     }
 }
 
@@ -270,6 +275,22 @@ actor SecureStore {
         let before = newestBackupURL()?.lastPathComponent
         snapshotCurrentState()
         return newestBackupURL()?.lastPathComponent != before
+    }
+
+    /// Deletes every snapshot holding any of these trips, so data deleted for
+    /// retention is not still one restore away. A snapshot that cannot be read
+    /// is kept: it cannot be shown to hold anything. Returns how many went.
+    @discardableResult
+    func discardBackups(containingAnyTripIn tripIDs: Set<UUID>) -> Int {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: backupsURL.path(percentEncoded: false)) else { return 0 }
+        var discarded = 0
+        for name in names where name.hasSuffix(".bin") {
+            let url = backupsURL.appending(path: name)
+            guard let sealed = try? Data(contentsOf: url), let snapshot = try? decodeSnapshot(sealed),
+                  snapshot.trips.contains(where: { tripIDs.contains($0.id) }) else { continue }
+            if (try? FileManager.default.removeItem(at: url)) != nil { discarded += 1 }
+        }
+        return discarded
     }
 
     /// Newest first, each summarised by what it actually contains.

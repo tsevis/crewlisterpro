@@ -64,9 +64,11 @@ final class ShareModel {
     var onFinish: () -> Void = {}
 
     var headline: String {
-        if isLoading { return "Reading what was shared…" }
-        if accepted.isEmpty { return "Nothing here to add" }
-        return accepted.count == 1 ? "One document ready" : "\(accepted.count) documents ready"
+        if isLoading { return String(localized: "Reading what was shared…") }
+        if accepted.isEmpty { return String(localized: "Nothing here to add") }
+        return accepted.count == 1
+            ? String(localized: "One document ready")
+            : String(localized: "\(accepted.count) documents ready")
     }
 
     /// Reads each attachment and stages it.
@@ -78,7 +80,7 @@ final class ShareModel {
         for provider in attachments {
             do {
                 guard let type = Self.acceptableType(of: provider) else {
-                    problems.append("One attachment was not an image or a PDF.")
+                    problems.append(String(localized: "One attachment was not an image or a PDF."))
                     continue
                 }
                 let url = try await stage(provider, as: type)
@@ -93,7 +95,7 @@ final class ShareModel {
         // make, so the sheet says why and gets out of the way rather than
         // offering a button that would do nothing.
         if accepted.isEmpty, problems.isEmpty {
-            problems.append("Nothing that could be read as a document was shared.")
+            problems.append(String(localized: "Nothing that could be read as a document was shared."))
         }
     }
 
@@ -133,7 +135,7 @@ final class ShareModel {
                     return
                 }
                 guard let url else {
-                    continuation.resume(throwing: SharedInbox.InboxError.unsupported(name: provider.suggestedName ?? "the attachment"))
+                    continuation.resume(throwing: SharedInbox.InboxError.unsupported(name: provider.suggestedName ?? String(localized: "the attachment")))
                     return
                 }
                 // The URL is valid only inside this callback, so the bytes are
@@ -194,7 +196,7 @@ struct ShareSheetView: View {
                         .foregroundStyle(model.accepted.isEmpty ? Color.orange : Color.accentColor)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(model.headline).font(.headline)
-                        Text("CrewListr Pro").font(.caption).foregroundStyle(.secondary)
+                        Text(verbatim: "CrewListr Pro").font(.caption).foregroundStyle(.secondary)
                     }
                 }
 

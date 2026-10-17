@@ -4,16 +4,21 @@ enum VerificationState: String, Codable, CaseIterable { case pending, verified, 
 enum CrewRole: String, Codable, CaseIterable, Identifiable {
     case skipper, passenger
     var id: String { rawValue }
-    var label: String { rawValue.capitalized }
+    var label: String {
+        switch self {
+        case .skipper: String(localized: "Skipper")
+        case .passenger: String(localized: "Passenger")
+        }
+    }
 }
 enum RiskLevel: String, Codable, CaseIterable {
     case low, review, high
 
     var label: String {
         switch self {
-        case .low: "Cleared"
-        case .review: "Needs review"
-        case .high: "Rejected"
+        case .low: String(localized: "Cleared")
+        case .review: String(localized: "Needs review")
+        case .high: String(localized: "Rejected")
         }
     }
 }
@@ -64,7 +69,7 @@ struct Boat: Codable, Identifiable, Hashable {
     var displayName: String {
         let own = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         if !own.isEmpty { return own }
-        return isComplete ? name : "Untitled yacht"
+        return isComplete ? name : String(localized: "Untitled yacht")
     }
 
     static let placeholderName = "NEW YACHT"
@@ -119,6 +124,10 @@ struct Trip: Codable, Identifiable, Hashable {
     var embarkationTime: String = ""
     var embarkationPort: String = ""
 
+    /// When this trip's crew list was first exported. Starts the clock on
+    /// deleting its personal data — see `TripRetention`. Nil until then.
+    var firstExportedAt: Date?
+
     var isArchived: Bool { status == .archived }
 }
 
@@ -149,6 +158,7 @@ extension Trip {
         // Added with the passenger manifest, after trips were already on disk.
         embarkationTime = (try? container.decode(String.self, forKey: .embarkationTime)) ?? ""
         embarkationPort = (try? container.decode(String.self, forKey: .embarkationPort)) ?? ""
+        firstExportedAt = try? container.decodeIfPresent(Date.self, forKey: .firstExportedAt)
     }
 }
 
@@ -317,10 +327,10 @@ enum ReviewStatus: String, Sendable {
 
     var label: String {
         switch self {
-        case .awaitingReview: "Awaiting review"
-        case .inProgress: "Review in progress"
-        case .cleared: "Cleared for export"
-        case .rejected: "Rejected"
+        case .awaitingReview: String(localized: "Awaiting review")
+        case .inProgress: String(localized: "Review in progress")
+        case .cleared: String(localized: "Cleared for export")
+        case .rejected: String(localized: "Rejected")
         }
     }
 
@@ -363,9 +373,9 @@ struct CrewAssignment: Codable, Identifiable, Hashable {
 
 extension CrewAssignment {
     /// An unreadable role reads as `.passenger`, which is the safe direction:
-    /// a trip with no skipper is blocked from export and says so, whereas
-    /// guessing `.skipper` would let a crew list out naming the wrong person as
-    /// master of the vessel.
+    /// a trip with no skipper warns before export, whereas guessing `.skipper`
+    /// would let a crew list out naming the wrong person as master of the
+    /// vessel.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -483,12 +493,12 @@ struct AppData: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         var losses: [String] = []
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        boats = Self.salvage(from: container, forKey: .boats, describing: "boat", into: &losses)
-        trips = Self.salvage(from: container, forKey: .trips, describing: "trip", into: &losses)
-        people = Self.salvage(from: container, forKey: .people, describing: "person", into: &losses)
-        documents = Self.salvage(from: container, forKey: .documents, describing: "document", into: &losses)
-        assignments = Self.salvage(from: container, forKey: .assignments, describing: "crew assignment", into: &losses)
-        savedCrew = Self.salvage(from: container, forKey: .savedCrew, describing: "saved crew member", into: &losses)
+        boats = Self.salvage(from: container, forKey: .boats, into: &losses)
+        trips = Self.salvage(from: container, forKey: .trips, into: &losses)
+        people = Self.salvage(from: container, forKey: .people, into: &losses)
+        documents = Self.salvage(from: container, forKey: .documents, into: &losses)
+        assignments = Self.salvage(from: container, forKey: .assignments, into: &losses)
+        savedCrew = Self.salvage(from: container, forKey: .savedCrew, into: &losses)
         // Not salvaged into `losses`: unreadable settings cost the operator a
         // handful of preferences they can set again in a minute, which is not
         // the same kind of loss as a passport that has left a trip, and saying
@@ -502,7 +512,6 @@ struct AppData: Codable {
     private static func salvage<Element: Decodable>(
         from container: KeyedDecodingContainer<CodingKeys>,
         forKey key: CodingKeys,
-        describing noun: String,
         into losses: inout [String]
     ) -> [Element] {
         // An absent key is not damage: a store written before this collection
@@ -513,15 +522,44 @@ struct AppData: Codable {
         guard let wrapped = try? container.decode([Salvaged<Element>].self, forKey: key) else {
             // The collection itself was unreadable — not one bad element but a
             // key holding something that is not an array at all.
-            losses.append("The stored \(noun) list could not be read.")
+            losses.append(lossMessage(key, lost: nil))
             return []
         }
         let recovered = wrapped.compactMap(\.value)
         let lost = wrapped.count - recovered.count
         if lost > 0 {
-            losses.append("\(lost) \(noun)\(lost == 1 ? "" : "s") could not be read and \(lost == 1 ? "was" : "were") left out.")
+            losses.append(lossMessage(key, lost: lost))
         }
         return recovered
+    }
+
+    /// What the operator is told about one damaged collection: `lost` records
+    /// left out, or the whole collection when `lost` is nil.
+    ///
+    /// A whole sentence per collection rather than a noun dropped into one
+    /// template, so each language can give it the grammar it needs.
+    private static func lossMessage(_ key: CodingKeys, lost: Int?) -> String {
+        switch (key, lost) {
+        case (.boats, nil): String(localized: "The stored boat list could not be read.")
+        case (.boats, 1?): String(localized: "1 boat could not be read and was left out.")
+        case (.boats, let count?): String(localized: "\(count) boats could not be read and were left out.")
+        case (.trips, nil): String(localized: "The stored trip list could not be read.")
+        case (.trips, 1?): String(localized: "1 trip could not be read and was left out.")
+        case (.trips, let count?): String(localized: "\(count) trips could not be read and were left out.")
+        case (.people, nil): String(localized: "The stored person list could not be read.")
+        case (.people, 1?): String(localized: "1 person could not be read and was left out.")
+        case (.people, let count?): String(localized: "\(count) persons could not be read and were left out.")
+        case (.documents, nil): String(localized: "The stored document list could not be read.")
+        case (.documents, 1?): String(localized: "1 document could not be read and was left out.")
+        case (.documents, let count?): String(localized: "\(count) documents could not be read and were left out.")
+        case (.assignments, nil): String(localized: "The stored crew assignment list could not be read.")
+        case (.assignments, 1?): String(localized: "1 crew assignment could not be read and was left out.")
+        case (.assignments, let count?): String(localized: "\(count) crew assignments could not be read and were left out.")
+        case (.savedCrew, nil): String(localized: "The stored saved crew member list could not be read.")
+        case (.savedCrew, 1?): String(localized: "1 saved crew member could not be read and was left out.")
+        case (.savedCrew, let count?): String(localized: "\(count) saved crew members could not be read and were left out.")
+        default: String(localized: "Some stored records could not be read and were left out.")
+        }
     }
 
     /// Decodes an element, or absorbs its failure so its neighbours survive.

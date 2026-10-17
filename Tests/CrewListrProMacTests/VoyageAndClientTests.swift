@@ -208,6 +208,30 @@ final class VoyageAndClientTests: XCTestCase {
         XCTAssertEqual(rows.first { $0.isClient }?.fullName, "YUKI NAKAMURA")
     }
 
+    // MARK: - No skipper
+
+    /// No longer a blocker — the Coast Guard dropped the requirement — but the
+    /// operator is still told, until they ask not to be.
+    func testATripWithoutASkipperExportsWithAWarningTheOperatorCanSilence() throws {
+        let (store, _, skipper, _) = try makeCrewedStore()
+        store.setRole(.passenger, forPersonID: skipper)
+
+        XCTAssertFalse(store.exportBlockers.contains { $0.localizedCaseInsensitiveContains("skipper") },
+                       "\(store.exportBlockers)")
+        XCTAssertTrue(store.selectedTripNeedsSkipperWarning)
+
+        var settings = store.settings
+        settings.warnsWhenNoSkipper = false
+        store.updateSettings(settings)
+
+        XCTAssertFalse(store.selectedTripNeedsSkipperWarning)
+    }
+
+    func testSettingsSavedBeforeTheSkipperWarningExistedStillWarn() throws {
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+        XCTAssertTrue(decoded.warnsWhenNoSkipper)
+    }
+
     // MARK: - The skipper's email
 
     func testTheSkipperCarriesAnEmailAddress() throws {

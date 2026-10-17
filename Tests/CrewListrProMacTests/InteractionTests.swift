@@ -230,6 +230,26 @@ extension InteractionTests {
         XCTAssertEqual(harness.text(ofFieldAt: 2), prefix)
     }
 
+    // MARK: - Leaving a screen mid-edit
+
+    /// The boarding port is the last box on the trip form, so the operator types
+    /// it and goes straight to the crew list to export. The field never lost
+    /// focus — it was taken off screen — and the manifest went out with an
+    /// empty Embarkation Port.
+    func testAValueStillBeingTypedIsSavedWhenTheScreenIsLeft() {
+        let store = makeStore()
+        let boatID = store.addBoat(named: "S/Y ELPIDA")
+        let tripID = store.createTrip(boatID: boatID)
+        let screen = ScreenSwitch()
+        let harness = Harness(EmbarkationPortProbe(tripID: tripID, screen: screen).environment(store))
+
+        harness.typeWithoutLeaving("Lavrio", intoFieldAt: 0)
+        screen.showsTrip = false
+        harness.settle()
+
+        XCTAssertEqual(store.data.trips.first { $0.id == tripID }?.embarkationPort, "LAVRIO")
+    }
+
     // MARK: - A name the crew list cannot carry
 
     /// Typed, stored and objected to — rather than dropped on the way in, which
@@ -277,6 +297,32 @@ private struct ReviewPaneProbe: View {
     var body: some View {
         if let document = store.data.documents.first(where: { $0.id == documentID }) {
             FieldReviewPane(document: document)
+        }
+    }
+}
+
+/// Whether the trip form is on screen, flipped by the test the way the sidebar
+/// flips `AppShell.screen`.
+@Observable
+private final class ScreenSwitch {
+    var showsTrip = true
+}
+
+/// The boarding-port box exactly as `TripScreen` wires it, on a screen the test
+/// can take away.
+private struct EmbarkationPortProbe: View {
+    @Environment(CrewStore.self) private var store
+    let tripID: UUID
+    let screen: ScreenSwitch
+
+    var body: some View {
+        if screen.showsTrip, let trip = store.data.trips.first(where: { $0.id == tripID }) {
+            CommitField(placeholder: "PIRAEUS", value: trip.embarkationPort,
+                        normalise: { $0.uppercased() }) { value in
+                store.setEmbarkationPort(value, onTripWith: trip.id)
+            }
+        } else {
+            Text("Crew list")
         }
     }
 }

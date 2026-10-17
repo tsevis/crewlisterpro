@@ -66,7 +66,7 @@ struct Activity: Equatable, Sendable, Identifiable {
     /// Step `completed` of `total`, counted from zero.
     static func step(_ title: String, completed: Int, total: Int, detail: String? = nil) -> Activity {
         guard total > 0 else { return .indeterminate(title, detail: detail) }
-        let position = "\(min(completed + 1, total)) of \(total)"
+        let position = String(localized: "\(min(completed + 1, total)) of \(total)", comment: "Progress through a batch: current item, then total.")
         return Activity(
             title: title,
             detail: detail.map { "\(position) · \($0)" } ?? position,
@@ -88,7 +88,7 @@ struct Activity: Equatable, Sendable, Identifiable {
                       cancellable: Bool = true, style: Style = .sustained) -> Activity {
         let formatter = Self.byteFormatter
         let detail = expected > 0
-            ? "\(formatter.string(fromByteCount: received)) of \(formatter.string(fromByteCount: expected))"
+            ? String(localized: "\(formatter.string(fromByteCount: received)) of \(formatter.string(fromByteCount: expected))", comment: "Download progress: bytes received, then bytes expected.")
             : formatter.string(fromByteCount: received)
         return Activity(
             title: title,

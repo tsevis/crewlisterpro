@@ -69,7 +69,7 @@ struct DocumentImageView: View {
         }
     }
 
-    private func note(symbol: String, message: String) -> some View {
+    private func note(symbol: String, message: LocalizedStringKey) -> some View {
         VStack(spacing: 6) {
             Image(systemName: symbol)
                 .font(.title2)

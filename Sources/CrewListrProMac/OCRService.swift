@@ -29,7 +29,7 @@ enum OCRService {
     /// failing the whole import.
     private static let unreadable = OCRResult(
         fields: [:], risk: .review,
-        reasons: ["Preview or OCR is unavailable for this file."], rawText: ""
+        reasons: [String(localized: "Preview or OCR is unavailable for this file.")], rawText: ""
     )
 
     /// Reads a page that has already been decoded to pixels.
@@ -86,13 +86,13 @@ enum OCRService {
         }
 
         if let mrz {
-            var reasons = ["Machine-readable zone read; document number, birth date and expiry all checksum-valid."]
+            var reasons = [String(localized: "Machine-readable zone read; document number, birth date and expiry all checksum-valid.")]
             if mrz["full_name"] == nil {
-                reasons.append("The name line could not be read — type it from the image.")
+                reasons.append(String(localized: "The name line could not be read — type it from the image."))
             }
             return OCRResult(fields: mrz, risk: .review, reasons: reasons, rawText: text)
         }
-        return OCRResult(fields: MRZ.fallback(text), risk: .review, reasons: ["No checksum-valid machine-readable zone; every field needs checking against the image."], rawText: text)
+        return OCRResult(fields: MRZ.fallback(text), risk: .review, reasons: [String(localized: "No checksum-valid machine-readable zone; every field needs checking against the image.")], rawText: text)
     }
 
     /// One recognition pass.

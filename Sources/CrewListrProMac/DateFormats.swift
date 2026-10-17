@@ -61,12 +61,11 @@ enum VoyageDate {
     /// charter base thinks in Saturdays, and the number beside it is only there
     /// to say which one. The year is deliberately absent — a strip of dates is
     /// read at a glance and every one of them is this season — so anything
-    /// showing this must have the full date to hand as well; `TripStrip` puts
-    /// `printed` in the chip's tooltip.
+    /// showing this must have the full date to hand as well.
     ///
-    /// English and fixed, like `DocumentDate`'s months: the same operator reads
-    /// both, and a crew list printed in one language with a strip labelled in
-    /// another is worse than either.
+    /// English and fixed, like `DocumentDate`'s months. The screens no longer
+    /// use it — since the interface is translated they show the operator's own
+    /// locale — so it is only for text that must match the printed forms.
     static func short(_ date: Date, calendar: Calendar = .current) -> String {
         let pinned = gregorian(in: calendar)
         let parts = pinned.dateComponents([.weekday, .day, .month], from: date)
