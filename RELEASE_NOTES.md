@@ -1,4 +1,4 @@
-# Unreleased
+# CrewListr Pro 0.7.0
 
 **German, Spanish, French and Italian.** The interface — Mac, iPhone and iPad,
 the share extension and the camera and photo permission prompts — is now also in
@@ -240,6 +240,11 @@ countries.
 Open it and carry on; your existing trips, documents and confirmations are read
 as they are.
 
+From 0.6.0:
+
+- **Nothing to do.** The data is unchanged; Settings → Language now also
+  offers Deutsch, Español, Français and Italiano.
+
 From 0.5.0:
 
 - **Trips now delete themselves a week after their first export.** Trips you
@@ -279,7 +284,7 @@ require SQLCipher to be compiled from source for x86_64 first.
 
 ## Install
 
-1. Open `CrewListr-Pro-0.6.0.dmg`.
+1. Open `CrewListr-Pro-0.7.0.dmg`.
 2. Drag **CrewListr Pro** onto the Applications folder.
 3. Open it from Applications.
 
