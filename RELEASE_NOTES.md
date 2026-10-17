@@ -234,6 +234,17 @@ as they are.
 
 From 0.5.0:
 
+- **Trips now delete themselves a week after their first export.** Trips you
+  exported with 0.5.0 or earlier carry no export date, so they are never
+  deleted automatically — delete them by hand once you no longer need them.
+  The clock starts with the first export made by 0.6.0.
+- **The interface follows the system language.** On a Mac set to Greek or
+  Ukrainian the app opens in that language; Settings → Language changes it
+  for this app alone, from the next launch.
+- **A trip with no skipper exports**, after one question you can switch off.
+
+From 0.4.0:
+
 - **Export writes three files**, the passenger manifest `.xlsx` beside the CSV
   and PDF. Turn it off under Settings → Export if you do not need it.
 - **Existing trips have no boarding time or port.** Fill them in on the Trip
@@ -260,7 +271,7 @@ require SQLCipher to be compiled from source for x86_64 first.
 
 ## Install
 
-1. Open `CrewListr-Pro-0.5.0.dmg`.
+1. Open `CrewListr-Pro-0.6.0.dmg`.
 2. Drag **CrewListr Pro** onto the Applications folder.
 3. Open it from Applications.
 
