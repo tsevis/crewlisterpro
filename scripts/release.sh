@@ -207,7 +207,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <dict>
     <key>CFBundleExecutable</key><string>CrewListrProMac</string>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleLocalizations</key><array><string>en</string><string>el</string><string>uk</string></array>
+    <key>CFBundleLocalizations</key><array><string>en</string><string>de</string><string>el</string><string>es</string><string>fr</string><string>it</string><string>uk</string></array>
     <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
     <key>CFBundleName</key><string>${APP_NAME}</string>
     <key>CFBundleDisplayName</key><string>${APP_NAME}</string>

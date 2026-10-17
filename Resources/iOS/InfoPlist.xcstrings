@@ -4,6 +4,12 @@
     "NSCameraUsageDescription": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro verwendet die Kamera, um eine Passseite zu scannen. Der Scan bleibt verschlüsselt auf diesem iPhone und wird niemals hochgeladen."
+          }
+        },
         "el": {
           "stringUnit": {
             "state": "translated",
@@ -14,6 +20,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "CrewListr Pro uses the camera to scan a passport page. The scan stays on this iPhone, encrypted, and is never uploaded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro usa la cámara para escanear una página del pasaporte. El escaneo se queda en este iPhone, cifrado, y nunca se sube."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro utilise l’appareil photo pour numériser une page de passeport. La numérisation reste sur cet iPhone, chiffrée, et n’est jamais envoyée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro usa la fotocamera per scansionare una pagina del passaporto. La scansione resta su questo iPhone, crittografata, e non viene mai caricata."
           }
         },
         "uk": {
@@ -27,6 +51,12 @@
     "NSPhotoLibraryUsageDescription": {
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro liest die Passfotos, die Sie auswählen, um eine Crewliste auszufüllen. Nichts wird hochgeladen und kein anderes Foto wird angesehen."
+          }
+        },
         "el": {
           "stringUnit": {
             "state": "translated",
@@ -37,6 +67,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "CrewListr Pro reads the passport photographs you choose so it can fill in a crew list. Nothing is uploaded and no other photograph is looked at."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro lee las fotos de pasaportes que eliges para rellenar una lista de tripulantes. No se sube nada y no se mira ninguna otra foto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro lit les photos de passeport que vous choisissez pour remplir une liste d’équipage. Rien n’est envoyé et aucune autre photo n’est consultée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CrewListr Pro legge le foto dei passaporti che scegli per compilare una lista equipaggio. Non viene caricato nulla e nessun’altra foto viene esaminata."
           }
         },
         "uk": {
